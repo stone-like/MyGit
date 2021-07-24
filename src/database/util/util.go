@@ -3,8 +3,11 @@ package util
 import (
 	"errors"
 	"mygit/src/database/content"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 func Contains(s []string, e string) bool {
@@ -89,4 +92,77 @@ func CheckRegExp(reg, branchName string) bool {
 
 func CheckRegExpSubString(reg, branchName string) [][]string {
 	return regexp.MustCompile(reg).FindAllStringSubmatch(branchName, -1)
+}
+
+func createParentDirs(path string) []string {
+	var parents []string
+	dir := filepath.Dir(path)
+
+	if dir != "." {
+		ret := createParentDirs(dir)
+		parents = append(parents, dir)
+		parents = append(parents, ret...)
+	}
+
+	return parents
+
+}
+
+func ParentDirs(path string, nestedFirst bool) []string {
+	ret := createParentDirs(path)
+
+	if nestedFirst {
+		// xxx/yyy
+		// xxxの順番
+		sort.Slice(ret, func(i, j int) bool {
+			return len(ret[i]) > len(ret[j])
+		})
+	} else {
+		// xxx
+		// xxx/yyyの順番
+		sort.Slice(ret, func(i, j int) bool {
+			return len(ret[i]) < len(ret[j])
+		})
+	}
+
+	return ret
+}
+
+func FilePathWalkDir(root string, ignoreList []string) ([]string, error) {
+	var files []string
+
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		p, er := filepath.Rel(root, path)
+
+		if er != nil {
+			return er
+		}
+		if !info.IsDir() {
+			//.git/xxx/yyyとあるときに
+			match, er := pathMatch(ignoreList, p)
+
+			if er != nil {
+				return er
+			}
+
+			if !match {
+				files = append(files, p)
+			}
+
+		}
+
+		return nil
+	})
+	return files, err
+}
+
+func pathMatch(s []string, e string) (bool, error) {
+	for _, v := range s {
+		b := strings.HasPrefix(e, v)
+
+		if b {
+			return true, nil
+		}
+	}
+	return false, nil
 }

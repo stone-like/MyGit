@@ -1,6 +1,7 @@
 package src
 
 import (
+	"bytes"
 	con "mygit/src/database/content"
 	"os"
 	"path/filepath"
@@ -26,8 +27,8 @@ func Test_CompareTwoCommit(t *testing.T) {
 	dummyName := CreateFiles(t, xxxPath, "dummy.txt", "test2\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)

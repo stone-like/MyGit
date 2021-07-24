@@ -8,8 +8,9 @@ import (
 )
 
 type FileLock struct {
-	l  sync.Mutex
-	fd int
+	l        sync.Mutex
+	fd       int
+	filename string
 }
 
 func NewFileLock(filename string) *FileLock {
@@ -20,7 +21,7 @@ func NewFileLock(filename string) *FileLock {
 	if err != nil {
 		panic(err)
 	}
-	return &FileLock{fd: fd}
+	return &FileLock{fd: fd, filename: filename}
 }
 func (m *FileLock) Lock() {
 	m.l.Lock()

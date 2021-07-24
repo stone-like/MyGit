@@ -1,6 +1,7 @@
 package src
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,8 +44,8 @@ func Test_Dummy(t *testing.T) {
 	assert.NoError(t, err)
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{rel1, rel2}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -78,8 +79,8 @@ func Test_Commit(t *testing.T) {
 	assert.NoError(t, err)
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{rel1, rel2}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)

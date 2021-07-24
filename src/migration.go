@@ -6,6 +6,7 @@ import (
 	con "mygit/src/database/content"
 	er "mygit/src/errors"
 	"mygit/util"
+	"os"
 	"path/filepath"
 )
 
@@ -245,6 +246,14 @@ func (m *Migration) CheckForConflict(path string, oldEntry, newEntry *con.Entry)
 func (m *Migration) UntrackedParent(path string) (string, error) {
 	//workspaceに存在しないファイルの親を調べる(親にuntrackedが残っていたらアウトなので)
 	for _, d := range util.ParentDirs(path) {
+		//treediffに存在するPathで、worksapaceに存在せず、その親もworkspaceに存在しない場合があるので、
+		//まずとってきた親候補が存在するかチェックする
+		stat, _ := os.Stat(filepath.Join(m.repo.w.Path, d))
+
+		if stat == nil {
+			//親も存在しないなら
+			continue
+		}
 		lists, err := m.repo.w.ListDir(filepath.Join(m.repo.w.Path, d))
 		if err != nil {
 			return "", err

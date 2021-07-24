@@ -1,6 +1,7 @@
 package src
 
 import (
+	"bytes"
 	e "mygit/src/errors"
 	"os"
 	"path/filepath"
@@ -82,8 +83,8 @@ func Test_CreateCommitMessage(t *testing.T) {
 	rel2, err := filepath.Rel(tempPath, dummyName)
 	assert.NoError(t, err)
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{rel1, rel2}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -117,8 +118,8 @@ func Test_CreateThreeCommit(t *testing.T) {
 	rel2, err := filepath.Rel(tempPath, dummyName)
 	assert.NoError(t, err)
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{rel1, rel2}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -199,8 +200,8 @@ func Test_Dir(t *testing.T) {
 	CreateFiles(t, xxxPath, "dummy.txt", "test2\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)

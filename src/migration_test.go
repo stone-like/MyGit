@@ -2,6 +2,8 @@ package src
 
 import (
 	"bytes"
+	"fmt"
+	er "mygit/src/errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,8 +29,8 @@ func PrepareCompareTwoCommit(t *testing.T) string {
 	CreateFiles(t, xxxPath, "exists.txt", "test2\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -104,13 +106,13 @@ func TestUntrackedOverWritten(t *testing.T) {
 	tempPath := filepath.Join(curDir, "tempDir")
 	err = os.MkdirAll(tempPath, os.ModePerm)
 	assert.NoError(t, err)
-	// defer os.RemoveAll(tempPath)
+	defer os.RemoveAll(tempPath)
 
 	CreateFiles(t, tempPath, "hello.txt", "test\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -120,9 +122,9 @@ func TestUntrackedOverWritten(t *testing.T) {
 
 	var buf1 bytes.Buffer
 
-	err = StartBranch(tempPath, []string{"from"}, &buf1)
+	err = StartBranch(tempPath, []string{"from"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
-	err = StartBranch(tempPath, []string{"to"}, &buf1)
+	err = StartBranch(tempPath, []string{"to"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
 
 	var buf2 bytes.Buffer
@@ -147,8 +149,13 @@ func TestUntrackedOverWritten(t *testing.T) {
 	// コミットＡからコミットＣ(from)をつくる(dup.txt(untrackedとする)
 
 	// コミットＣ->コミットＢにマージ
-	// err = StartCheckout(tempPath, []string{"to"}, &buf3)
-	// assert.NoError(t, err)
+	err = StartCheckout(tempPath, []string{"to"}, &buf3)
+	if diff := cmp.Diff(&er.ConflictOccurError{
+		ConflictDetail: fmt.Sprint("error: The following untracked working tree files would be overwritten by checkout:\n\tdup.txt\nPlease move or remove them before you switch branches.\n"),
+	}, err); diff != "" {
+		t.Errorf("diff is: %s\n", diff)
+	}
+
 }
 
 //refs/heads以下をcommitで更新できるようになったらtest可能
@@ -159,13 +166,13 @@ func TestLocalChangeOverWritten(t *testing.T) {
 	tempPath := filepath.Join(curDir, "tempDir")
 	err = os.MkdirAll(tempPath, os.ModePerm)
 	assert.NoError(t, err)
-	// defer os.RemoveAll(tempPath)
+	defer os.RemoveAll(tempPath)
 
 	CreateFiles(t, tempPath, "hello.txt", "test\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -175,9 +182,9 @@ func TestLocalChangeOverWritten(t *testing.T) {
 
 	var buf1 bytes.Buffer
 
-	err = StartBranch(tempPath, []string{"from"}, &buf1)
+	err = StartBranch(tempPath, []string{"from"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
-	err = StartBranch(tempPath, []string{"to"}, &buf1)
+	err = StartBranch(tempPath, []string{"to"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
 
 	var buf2 bytes.Buffer
@@ -205,8 +212,12 @@ func TestLocalChangeOverWritten(t *testing.T) {
 	// 内容が同じならswitchされるがtest1(コミットCからはdeleteされてしまう)(ただコミットBで同じ内容があるから内容は失われないからセーフということだろう)
 
 	// コミットＣ->コミットＢにマージ
-	// err = StartCheckout(tempPath, []string{"to"}, &buf3)
-	// assert.NoError(t, err)
+	err = StartCheckout(tempPath, []string{"to"}, &buf3)
+	if diff := cmp.Diff(&er.ConflictOccurError{
+		ConflictDetail: fmt.Sprint("error: Your local changes to the following files would be overwritten by checkout:\n\tdup.txt\nPlease commit your changes or stash them before you switch branches.\n"),
+	}, err); diff != "" {
+		t.Errorf("diff is: %s\n", diff)
+	}
 }
 
 //refs/heads以下をcommitで更新できるようになったらtest可能
@@ -217,13 +228,13 @@ func TestUntrackedRemoved(t *testing.T) {
 	tempPath := filepath.Join(curDir, "tempDir")
 	err = os.MkdirAll(tempPath, os.ModePerm)
 	assert.NoError(t, err)
-	// defer os.RemoveAll(tempPath)
+	defer os.RemoveAll(tempPath)
 
 	CreateFiles(t, tempPath, "hello.txt", "test\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -233,9 +244,9 @@ func TestUntrackedRemoved(t *testing.T) {
 
 	var buf1 bytes.Buffer
 
-	err = StartBranch(tempPath, []string{"from"}, &buf1)
+	err = StartBranch(tempPath, []string{"from"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
-	err = StartBranch(tempPath, []string{"to"}, &buf1)
+	err = StartBranch(tempPath, []string{"to"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
 
 	var buf3 bytes.Buffer
@@ -261,8 +272,12 @@ func TestUntrackedRemoved(t *testing.T) {
 	//また作成する(addしないでworkspaceにとどめる)
 
 	// コミットＣ->コミットＢにマージ
-	// err = StartCheckout(tempPath, []string{"to"}, &buf3)
-	// assert.NoError(t, err)
+	err = StartCheckout(tempPath, []string{"to"}, &buf3)
+	if diff := cmp.Diff(&er.ConflictOccurError{
+		ConflictDetail: fmt.Sprint("error: The following untracked working tree files would be removed by checkout:\n\tadded.txt\nPlease move or remove them before you switch branches.\n"),
+	}, err); diff != "" {
+		t.Errorf("diff is: %s\n", diff)
+	}
 }
 
 //refs/heads以下をcommitで更新できるようになったらtest可能
@@ -273,13 +288,13 @@ func TestUpdatingFollowingDirectoriesLose(t *testing.T) {
 	tempPath := filepath.Join(curDir, "tempDir")
 	err = os.MkdirAll(tempPath, os.ModePerm)
 	assert.NoError(t, err)
-	// defer os.RemoveAll(tempPath)
+	defer os.RemoveAll(tempPath)
 
 	CreateFiles(t, tempPath, "hello.txt", "test\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -289,9 +304,9 @@ func TestUpdatingFollowingDirectoriesLose(t *testing.T) {
 
 	var buf1 bytes.Buffer
 
-	err = StartBranch(tempPath, []string{"from"}, &buf1)
+	err = StartBranch(tempPath, []string{"from"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
-	err = StartBranch(tempPath, []string{"to"}, &buf1)
+	err = StartBranch(tempPath, []string{"to"}, &BranchOption{}, &buf1)
 	assert.NoError(t, err)
 
 	var buf2 bytes.Buffer
@@ -299,6 +314,8 @@ func TestUpdatingFollowingDirectoriesLose(t *testing.T) {
 	assert.NoError(t, err)
 
 	xxxPath := filepath.Join(tempPath, "xxx")
+	err = os.MkdirAll(xxxPath, os.ModePerm)
+	assert.NoError(t, err)
 
 	CreateFiles(t, xxxPath, "dup.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
@@ -311,18 +328,29 @@ func TestUpdatingFollowingDirectoriesLose(t *testing.T) {
 	assert.NoError(t, err)
 
 	xxxDupPath := filepath.Join(tempPath, "xxx", "dup.txt")
+	err = os.MkdirAll(xxxDupPath, os.ModePerm)
+	assert.NoError(t, err)
 	CreateFiles(t, xxxDupPath, "a.txt", "untracked\n")
 
-	// 	error: Your local changes to the following files would be overwritten by checkout:
-	//         add.txt
-	// Please commit your changes or stash them before you switch branches.
-	// 状況再現としてはコミットＡ->コミットＢをつくる(dum.txt
-	// コミットＡからコミットＣをつくる(dum.txt(indexedでコミットＢとは内容を変える(内容が同じならswitchされる))
-	// 内容が同じならswitchされるがtest1(コミットCからはdeleteされてしまう)(ただコミットBで同じ内容があるから内容は失われないからセーフということだろう)
+	// treeDiffにDirがないのになんでDirのConflict？と思ったけど、
+	// まずDiffPathがlib/app.txtとする
+	// それでWorkspaceであたらしくlib/app.txtというDirをつくったとする
+	// そうするとisDir条件に引っかかる
+
+	// これはコミットではファイルだったがワークスペースではdirになってさらにその中にuntrackedなものがあるとき起こる
+	// (checkoutによってdir -> fileになってしまい、untrackedが消えるから警告ということ)
+
+	// 再現方法
+	// checkout先でxxx/dum.txt(ファイル)
+	// ccheckout元でxxx/dum.txt/a.txtとする、この時a.txtはuntracked
 
 	// コミットＣ->コミットＢにマージ
-	// err = StartCheckout(tempPath, []string{"to"}, &buf3)
-	// assert.NoError(t, err)
+	err = StartCheckout(tempPath, []string{"to"}, &buf3)
+	if diff := cmp.Diff(&er.ConflictOccurError{
+		ConflictDetail: fmt.Sprint("error: Updating the following directories would lose untracked files in them\n\txxx/dup.txt\n\n\n"),
+	}, err); diff != "" {
+		t.Errorf("diff is: %s\n", diff)
+	}
 }
 
 func PrepareParentUntracked(t *testing.T) string {
@@ -341,8 +369,8 @@ func PrepareParentUntracked(t *testing.T) string {
 	CreateFiles(t, xxxPath, "dummy.txt", "test2\n")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)

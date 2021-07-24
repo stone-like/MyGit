@@ -31,16 +31,16 @@ func Test_Status(t *testing.T) {
 	// assert.NoError(t, err)
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 
 	expected := "?? dummy.txt\n?? hello.txt\n"
 
 	fmt.Println(helloName, dummyName)
 
-	buf := new(bytes.Buffer)
-	err = StartStatus(buf, tempPath, false)
+	bbuf := new(bytes.Buffer)
+	err = StartStatus(bbuf, tempPath, false)
 	assert.NoError(t, err)
 
 	assert.Equal(t, expected, buf.String())
@@ -65,8 +65,8 @@ func Test_StatusOnlyUntracked(t *testing.T) {
 	assert.NoError(t, err)
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 
 	//dummy.txtだけuntracked
@@ -78,8 +78,8 @@ func Test_StatusOnlyUntracked(t *testing.T) {
 
 	fmt.Println(helloName, dummyName)
 
-	buf := new(bytes.Buffer)
-	err = StartStatus(buf, tempPath, false)
+	bbuf := new(bytes.Buffer)
+	err = StartStatus(bbuf, tempPath, false)
 	assert.NoError(t, err)
 
 	bs := buf.String()
@@ -107,8 +107,8 @@ func Test_UntrackedDirectories_NotTheirContent(t *testing.T) {
 	dummyName := CreateFiles(t, xxxPath, "dummy.txt", "test2")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 
 	//contentがuntrackなdirがある場合、dir/で表示する
@@ -116,8 +116,8 @@ func Test_UntrackedDirectories_NotTheirContent(t *testing.T) {
 
 	fmt.Println(helloName, dummyName)
 
-	buf := new(bytes.Buffer)
-	err = StartStatus(buf, tempPath, false)
+	bbuf := new(bytes.Buffer)
+	err = StartStatus(bbuf, tempPath, false)
 	assert.NoError(t, err)
 	bs := buf.String()
 	assert.Equal(t, expected, bs)
@@ -149,8 +149,8 @@ func Test_UntrackedFiles_TrackedDir(t *testing.T) {
 	innerName := CreateFiles(t, yyyPath, "inner.txt", "test2")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 
 	rel1, err := filepath.Rel(tempPath, innerName)
@@ -167,8 +167,8 @@ func Test_UntrackedFiles_TrackedDir(t *testing.T) {
 
 	//contentがuntrackなdirがある場合、dir/で表示する
 	expected := "?? xxx/yyy/zzz/\n?? xxx/outer.txt\n"
-	buf := new(bytes.Buffer)
-	err = StartStatus(buf, tempPath, false)
+	bbuf := new(bytes.Buffer)
+	err = StartStatus(bbuf, tempPath, false)
 	assert.NoError(t, err)
 	bs := buf.String()
 	assert.Equal(t, expected, bs)
@@ -256,8 +256,8 @@ func PrepareFile(t *testing.T) (func(), error) {
 	CreateFiles(t, yyyPath, "dummy2.txt", "")
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 
 	//dummy.txtだけuntracked
@@ -477,8 +477,8 @@ func Prepare(t *testing.T) func() {
 	assert.NoError(t, err)
 
 	is := []string{tempPath}
-
-	err = StartInit(is)
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
 	assert.NoError(t, err)
 	ss := []string{rel1, rel2, rel3}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)

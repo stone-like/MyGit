@@ -32,12 +32,22 @@ func (t *TreeDiff) CompareObjId(fromObjId, toObjId string) error {
 	if err != nil {
 		return err
 	}
+	//btoObjIdが""の時、bTreeはnilなのでそのままEntriesを呼ぶとError
 
-	err = t.DetectDeletions(aTree.Entries, bTree.Entries)
+	var aEntries map[string]con.Object
+	var bEntries map[string]con.Object
+	if aTree != nil {
+		aEntries = aTree.Entries
+	}
+	if bTree != nil {
+		bEntries = bTree.Entries
+	}
+
+	err = t.DetectDeletions(aEntries, bEntries)
 	if err != nil {
 		return err
 	}
-	err = t.DetectAddtions(aTree.Entries, bTree.Entries)
+	err = t.DetectAddtions(aEntries, bEntries)
 	if err != nil {
 		return err
 	}
@@ -48,6 +58,7 @@ func (t *TreeDiff) CompareObjId(fromObjId, toObjId string) error {
 func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object) error {
 	//aEntriesにはあって、bEntriesにはないものをみつける
 	for k, v := range aEntries {
+		//bEntiesがnilだとしても存在しないindewxを使うとokがfalseになるだけ(nilなので全部存在しないんだけど)
 		path := k
 		other, ok := bEntries[k]
 		ev, evOk := v.(*con.Entry)

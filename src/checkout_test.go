@@ -2,6 +2,7 @@ package src
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,5 +56,141 @@ func Test_ConflictUntrackParent(t *testing.T) {
 	//HEAD->HEAD^に戻す
 	err = StartCheckout(rootPath, []string{"@^"}, &buf)
 	assert.NoError(t, err)
+
+}
+
+func TestPrintDetach(t *testing.T) {
+	curDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tempPath := filepath.Join(curDir, "tempDir")
+	err = os.MkdirAll(tempPath, os.ModePerm)
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempPath)
+
+	CreateFiles(t, tempPath, "hello.txt", "test\n")
+
+	is := []string{tempPath}
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
+	assert.NoError(t, err)
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	assert.NoError(t, err)
+
+	CreateFiles(t, tempPath, "a.txt", "test\n")
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	assert.NoError(t, err)
+
+	var buf1 bytes.Buffer
+
+	err = StartBranch(tempPath, []string{"to"}, &BranchOption{}, &buf1)
+	assert.NoError(t, err)
+
+	var buf2 bytes.Buffer
+	err = StartCheckout(tempPath, []string{"to"}, &buf2)
+	assert.NoError(t, err)
+
+	xxxPath := filepath.Join(tempPath, "xxx")
+	err = os.MkdirAll(xxxPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	CreateFiles(t, xxxPath, "dup.txt", "test\n")
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "test3")
+	assert.NoError(t, err)
+
+	ret, err := ParseRev("master^")
+	assert.NoError(t, err)
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+	objId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+
+	shortObjId := ShortOid(objId, repo.d)
+
+	var buf3 bytes.Buffer
+	err = StartCheckout(tempPath, []string{"master^"}, &buf3)
+	assert.NoError(t, err)
+	str := buf3.String()
+	assert.Equal(t, fmt.Sprintf("Note: checking out 'master^'\n\n%s\n\nHEAD is now at %s test\n", DETACHED_HEAD_MESSAGE, shortObjId), str)
+
+}
+
+func TestPrintPreviousHead(t *testing.T) {
+	curDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tempPath := filepath.Join(curDir, "tempDir")
+	err = os.MkdirAll(tempPath, os.ModePerm)
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempPath)
+
+	CreateFiles(t, tempPath, "hello.txt", "test\n")
+
+	is := []string{tempPath}
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
+	assert.NoError(t, err)
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	assert.NoError(t, err)
+
+	CreateFiles(t, tempPath, "a.txt", "test\n")
+
+	assert.NoError(t, err)
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	assert.NoError(t, err)
+
+	var buf1 bytes.Buffer
+
+	err = StartBranch(tempPath, []string{"to"}, &BranchOption{}, &buf1)
+	assert.NoError(t, err)
+
+	var buf2 bytes.Buffer
+	err = StartCheckout(tempPath, []string{"to"}, &buf2)
+	assert.NoError(t, err)
+
+	xxxPath := filepath.Join(tempPath, "xxx")
+	err = os.MkdirAll(xxxPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	CreateFiles(t, xxxPath, "dup.txt", "test\n")
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "test3")
+	assert.NoError(t, err)
+
+	ret, err := ParseRev("master^")
+	assert.NoError(t, err)
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+	objId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+
+	var buf3 bytes.Buffer
+	err = StartCheckout(tempPath, []string{"master^"}, &buf3)
+	assert.NoError(t, err)
+
+	var buf4 bytes.Buffer
+	err = StartCheckout(tempPath, []string{"to"}, &buf4)
+	assert.NoError(t, err)
+	str := buf4.String()
+
+	var bufp bytes.Buffer
+	PrintHeadPosition("Previous HEAD position was", objId, repo, &bufp)
+
+	assert.Equal(t, bufp.String()+"Switched to branch 'to'\n", str)
 
 }

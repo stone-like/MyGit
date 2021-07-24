@@ -22,6 +22,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var verbose bool
+var delete bool
+var force bool
+var ForceDelete bool
+
 // branchCmd represents the branch command
 var branchCmd = &cobra.Command{
 	Use:   "branch",
@@ -31,8 +36,13 @@ var branchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		rootPath, _ := os.Getwd()
+		bo := &src.BranchOption{
+			HasV: verbose,
+			HasD: delete,
+			HasF: force,
+		}
 		w := os.Stdout
-		if err := src.StartBranch(rootPath, args, w); err != nil {
+		if err := src.StartBranch(rootPath, args, bo, w); err != nil {
 			return err
 		}
 
@@ -41,5 +51,9 @@ var branchCmd = &cobra.Command{
 }
 
 func init() {
+	diffCmd.Flags().BoolVarP(&verbose, "verbose", "v", true, "verbose")
+	diffCmd.Flags().BoolVarP(&delete, "delete", "d", true, "delete")
+	diffCmd.Flags().BoolVarP(&force, "force", "f", true, "force")
+	diffCmd.Flags().BoolVarP(&ForceDelete, "forceDelete", "D", true, "forceDelete")
 	rootCmd.AddCommand(branchCmd)
 }

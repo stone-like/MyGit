@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"mygit/src"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -29,7 +30,8 @@ var initCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(0, 1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		if err := src.StartInit(args); err != nil {
+		w := os.Stdout
+		if err := src.StartInit(args, w); err != nil {
 			return err
 		}
 

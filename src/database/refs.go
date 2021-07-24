@@ -1,7 +1,6 @@
 package database
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -14,6 +13,200 @@ import (
 
 type Refs struct {
 	Path string
+}
+
+type RefObj interface {
+	GetObjIdOrPath() string
+	ReadObjId() (string, error)
+}
+
+type Ref struct {
+	ObjId string
+}
+
+func (r *Ref) GetObjIdOrPath() string {
+	return r.ObjId
+}
+
+func (r *Ref) ReadObjId() (string, error) {
+	return r.ObjId, nil
+}
+
+type SymRef struct {
+	Path string
+	Refs *Refs
+}
+
+func (sr *SymRef) GetObjIdOrPath() string {
+	return sr.Path
+}
+
+func (sr *SymRef) ReadObjId() (string, error) {
+	return sr.Refs.ReadRef(sr.Path)
+}
+
+//IsHead=trueならDetachedHeadということで良いっぽい？
+func (sr *SymRef) IsHead() bool {
+	return sr.Path == "HEAD"
+}
+
+func (sr *SymRef) ShortName() string {
+	return sr.Refs.ShortName(sr.Path)
+}
+
+func (r *Refs) ShortName(path string) string {
+	return filepath.Base(path)
+}
+
+var refPrefix = `^ref: (.+)$`
+
+func (r *Refs) ReadObjIdOrSymRef(path string) (RefObj, error) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	//InitでHEADから読み取るときはまだ内容がないのでその時はRefを返せばいい
+	s := strings.TrimSpace(string(b))
+	refExp := util.CheckRegExpSubString(refPrefix, s)
+
+	//len(nil)は0となるので refExp != nilチェックはいらない
+	if len(refExp) != 0 {
+		return &SymRef{
+			Path: refExp[0][1],
+			Refs: r,
+		}, nil
+	} else {
+		return &Ref{
+			ObjId: strings.TrimSpace(string(b)),
+		}, nil
+	}
+}
+
+func (r *Refs) ReadSymRef(path string) (string, error) {
+	ref, err := r.ReadObjIdOrSymRef(path)
+	if err != nil {
+		return "", err
+	}
+
+	switch v := ref.(type) {
+	case *Ref:
+		return v.GetObjIdOrPath(), nil
+	case *SymRef:
+		return r.ReadSymRef(filepath.Join(r.Path, v.GetObjIdOrPath()))
+	default:
+		return "", ErrorUnexpectedObjType
+	}
+
+}
+
+//最終的にSymRefで返す
+func (r *Refs) CurrentRef(source string) (*SymRef, error) {
+	ref, err := r.ReadObjIdOrSymRef(filepath.Join(r.Path, source))
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := ref.(type) {
+	case *SymRef:
+		return r.CurrentRef(v.GetObjIdOrPath())
+	case *Ref:
+		return &SymRef{
+			Path: source,
+			Refs: r,
+		}, nil
+	default:
+		return nil, ErrorUnexpectedObjType
+	}
+}
+
+func (r *Refs) DeleteBranch(path string) (string, error) {
+	p := filepath.Join(r.HeadsPath(), path)
+
+	stat, _ := os.Stat(p)
+
+	if stat == nil {
+		//存在しなければエラー
+		return "", ErrorPathNotExists
+	}
+
+	l := lock.NewFileLock(p)
+	l.Lock()
+	defer l.Unlock()
+
+	objId, err := r.ReadSymRef(p)
+	if err != nil {
+		return "", err
+	}
+
+	err = os.RemoveAll(p)
+	if err != nil {
+		return "", err
+	}
+	//refs/heads/features/xxxがあったとして、今xxxを削除してfeaturesが空になったとする
+	//そうするとfeaturesを削除したい(headsまでは削除しない)
+	err = r.DeleteParentDir(path)
+	if err != nil {
+		return "", err
+	}
+
+	return objId, nil
+}
+
+func (r *Refs) DeleteParentDir(path string) error {
+	for _, p := range util.ParentDirs(path, true) {
+		absPath := filepath.Join(r.HeadsPath(), p)
+		if absPath == r.HeadsPath() {
+			break
+		}
+
+		files, err := ioutil.ReadDir(absPath)
+		if err != nil {
+			return err
+		}
+
+		if len(files) != 0 {
+			//Dirが空でなければ削除しない
+			break
+		}
+
+		err = os.Remove(absPath)
+
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func (r *Refs) ListBranches() ([]*SymRef, error) {
+	return r.ListRefs(r.HeadsPath())
+}
+
+func (r *Refs) ListRefs(headsPath string) ([]*SymRef, error) {
+	lists, err := util.FilePathWalkDir(headsPath, []string{".", ".."})
+	if err != nil {
+		return nil, err
+	}
+
+	var temp []*SymRef
+	//WalkDirを使うことでnestedDirの下にあるファイルも一気に取れる
+	for _, l := range lists {
+		//refs/heads/~の相対パスとなる
+		relPath, err := filepath.Rel(r.Path, filepath.Join(r.HeadsPath(), l))
+
+		if err != nil {
+			return nil, err
+		}
+		temp = append(temp, &SymRef{
+			Path: relPath,
+			Refs: r,
+		})
+	}
+
+	return temp, nil
 }
 
 //branch名には制約がある
@@ -137,8 +330,11 @@ func (r *Refs) UpdateRefFile(path, objId string) error {
 	if err != nil {
 		return err
 	}
-
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
+	//CreateHeadPathで存在しない場合を作っているのでここではO_CREATEしなくていい
+	//で、OpenFileだけすると上書きじゃなくてAPPENDになるのでos.Createを使う
+	//O_TRUNCATEを使うかos.Createを使うか、あんまりOpenFileは使わなくてもいいかな
+	//ない場合は作りたいならos.Create使えばいい、用途としてはPermissionまで指定したい時
+	f, err := os.Create(path)
 	defer func() {
 		err := f.Close()
 		if err != nil {
@@ -154,7 +350,7 @@ func (r *Refs) UpdateRefFile(path, objId string) error {
 	//それは同時にコミットが起きてバラバラになってしまうみたいな時困るのであって、コミットAのときにブランチがさすObjIdAで、コミットBの時にブランチが指すObjIdBとなるのは大丈夫だと思う
 	//コミットの方は同時に起こらないようにロックしてある
 	err = lock.Flock(path, func() {
-		f.Write([]byte(objId + "\n"))
+		f.Write([]byte(fmt.Sprintf("%s\n", objId)))
 	})
 	if err != nil {
 		return err
@@ -165,7 +361,67 @@ func (r *Refs) UpdateRefFile(path, objId string) error {
 }
 
 func (r *Refs) UpdateHead(objId string) error {
-	r.UpdateRefFile(r.HeadPath(), objId)
+	r.UpdateSymRef(r.HeadPath(), objId)
+	return nil
+}
+
+func (r *Refs) UpdateSymRef(path, objId string) error {
+	l := lock.NewFileLock(path)
+	l.Lock()
+	defer l.Unlock()
+
+	ref, err := r.ReadObjIdOrSymRef(path)
+	if err != nil {
+		return err
+	}
+
+	symRef, ok := ref.(*SymRef)
+	//つまりHEAD->masterを指していたとしたらmasterにobjIdを書き込む
+	//DetachedHEADだったらそのままHEADにobjIdを書く
+	if !ok {
+		//Refの場合
+		f, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			err := f.Close()
+			if err != nil {
+				fmt.Println(err)
+			}
+		}()
+		f.Write([]byte(fmt.Sprintf("%s\n", objId)))
+	} else {
+		//SymRefの場合
+		err = r.UpdateSymRef(filepath.Join(r.Path, symRef.GetObjIdOrPath()), objId)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func (r *Refs) SetHead(revPath, objId string) error {
+	path := filepath.Join(r.HeadsPath(), revPath)
+
+	stat, _ := os.Stat(path)
+
+	if stat != nil && !stat.IsDir() {
+
+		relPath, _ := filepath.Rel(r.Path, path) //refs/heads/~以下だけ書きたい
+		err := r.UpdateRefFile(r.HeadPath(), fmt.Sprintf("ref: %s", relPath))
+		if err != nil {
+			return err
+		}
+	} else {
+		err := r.UpdateRefFile(r.HeadPath(), objId)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -178,7 +434,7 @@ func (r *Refs) ReadRef(name string) (string, error) {
 		return "", ErrorPathNotExists
 	}
 
-	return ReadRefFile(path)
+	return r.ReadSymRef(path)
 
 }
 
@@ -214,24 +470,25 @@ func (r *Refs) PathForName(name string) (string, bool) {
 }
 
 func (r *Refs) ReadHead() (string, error) {
-	if _, err := os.Stat(r.HeadPath()); err != nil {
-		return "", nil
-	}
+	return r.ReadSymRef(r.HeadPath())
+	// if _, err := os.Stat(r.HeadPath()); err != nil {
+	// 	return "", nil
+	// }
 
-	f, err := os.Open(r.HeadPath())
+	// f, err := os.Open(r.HeadPath())
 
-	if err != nil {
-		return "", err
-	}
+	// if err != nil {
+	// 	return "", err
+	// }
 
-	s := bufio.NewScanner(f)
+	// s := bufio.NewScanner(f)
 
-	var str string
-	for s.Scan() {
-		str += s.Text()
-	}
+	// var str string
+	// for s.Scan() {
+	// 	str += s.Text()
+	// }
 
-	return string(str), nil
+	// return string(str), nil
 }
 
 func (r *Refs) RefsPath() string {
