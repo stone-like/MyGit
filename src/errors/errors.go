@@ -1,6 +1,9 @@
 package errors
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type ParseError interface {
 	ParseMessage() string
@@ -59,4 +62,16 @@ func (c *ConflictOccurError) Error() string {
 
 type InternalError interface {
 	Cause() string
+}
+
+type InvalidFormatError struct {
+	FormatName string
+}
+
+func (i *InvalidFormatError) UserCause() string {
+	return fmt.Sprintf("%s is invalid format name\n", i.FormatName)
+}
+
+func (i *InvalidFormatError) Error() string {
+	return fmt.Sprintf("%s is invalid format name\n", i.FormatName)
 }

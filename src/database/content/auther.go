@@ -28,11 +28,24 @@ func generateTime(t time.Time) string {
 	return fmt.Sprintf("%d %s", unixTime, words[2])
 }
 
-func (a *Author) ShortTime() string {
+func (a *Author) GetUnixTime() time.Time {
+	t := time.Unix(int64(a.GetUnixTimeInt()), 0)
+
+	return t
+}
+
+func (a *Author) GetUnixTimeInt() int {
 	words := strings.Fields(a.CreatedAt)
 	ut, _ := strconv.Atoi(words[0])
-	t := time.Unix(int64(ut), 0)
-	return t.Format("2006-01-02")
+	return ut
+}
+
+func (a *Author) ShortTime() string {
+	return a.GetUnixTime().Format("2006-01-02")
+}
+
+func (a *Author) ReadableTime() string {
+	return a.GetUnixTime().Format("Mon Jan 2 15:4:5 2006 -0700")
 }
 
 func GenerateAuthor(name, email string) *Author {
