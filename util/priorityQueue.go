@@ -67,3 +67,8 @@ func (p *PriorityQueue) Pop() interface{} {
 	item := in.(*Item)
 	return item.GetValue() //Itemを返してもItemhの生存期間はPop()関数の中なので呼び出し下ではメモリから消えているっぽい？なので値だけ返す
 }
+
+func (p *PriorityQueue) SeeFirst() interface{} {
+	item := p.Queue[0]
+	return item.GetValue()
+}

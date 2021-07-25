@@ -156,3 +156,136 @@ func Test_LogOne(t *testing.T) {
 	}
 
 }
+
+func PrepareUninteresting(t *testing.T) func() {
+
+	// A -> B -> C  -> D master
+	//        -> E -> F -> G test1でC,Dのみにできるか？
+	curDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tempPath := filepath.Join(curDir, "tempDir")
+	err = os.MkdirAll(tempPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	CreateFiles(t, tempPath, "hello.txt", "test\n")
+
+	is := []string{tempPath}
+
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
+	assert.NoError(t, err)
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	CreateFiles(t, tempPath, "hello2.txt", "test\n")
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit2")
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	err = StartBranch(tempPath, []string{"test1"}, &BranchOption{}, &buf)
+	assert.NoError(t, err)
+
+	err = StartCheckout(tempPath, []string{"test1"}, &buf)
+	assert.NoError(t, err)
+	CreateFiles(t, tempPath, "hello3.txt", "test\n")
+	ss = []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+	CreateFiles(t, tempPath, "hello4.txt", "test\n")
+	ss = []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit4")
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+	CreateFiles(t, tempPath, "hello5.txt", "test\n")
+	ss = []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit5")
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	err = StartCheckout(tempPath, []string{"master"}, &buf)
+	assert.NoError(t, err)
+	CreateFiles(t, tempPath, "hello6.txt", "test\n")
+	ss = []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	assert.NoError(t, err)
+	CreateFiles(t, tempPath, "hello7.txt", "test\n")
+	ss = []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit7")
+	assert.NoError(t, err)
+
+	return func() {
+		os.RemoveAll(tempPath)
+	}
+}
+
+func Test_LogUninterested(t *testing.T) {
+
+	for _, d := range []struct {
+		title        string
+		targetBranch []string
+		expectCommit string
+	}{
+		{
+			title:        "uninterest^",
+			targetBranch: []string{"^test1", "master"},
+			expectCommit: "commit4",
+		},
+		{
+			title:        "uninterest..",
+			targetBranch: []string{"test1..master"},
+			expectCommit: "commit4",
+		},
+	} {
+		t.Run(d.title, func(t *testing.T) {
+			fn := PrepareUninteresting(t)
+			t.Cleanup(fn)
+
+			curDir, err := os.Getwd()
+			assert.NoError(t, err)
+			tempPath := filepath.Join(curDir, "tempDir")
+			buf := new(bytes.Buffer)
+			err = StartLog(tempPath, d.targetBranch, &LogOption{
+				Format: "oneline",
+			}, buf)
+			assert.NoError(t, err)
+
+			gitPath := filepath.Join(tempPath, ".git")
+			dbPath := filepath.Join(gitPath, "objects")
+			repo := GenerateRepository(tempPath, gitPath, dbPath)
+
+			ret, err := ParseRev("master")
+			assert.NoError(t, err)
+			commit7ObjId, err := ResolveRev(ret, repo)
+			assert.NoError(t, err)
+			ret, err = ParseRev("master^")
+			assert.NoError(t, err)
+			commit6ObjId, err := ResolveRev(ret, repo)
+			assert.NoError(t, err)
+
+			if diff := cmp.Diff(fmt.Sprintf("%s commit7\n%s commit6\n", commit7ObjId, commit6ObjId), buf.String()); diff != "" {
+				t.Errorf("diff is %s\n", diff)
+			}
+
+		})
+
+	}
+
+}
