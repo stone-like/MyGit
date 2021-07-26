@@ -92,3 +92,27 @@ func pathMatch(s []string, e string) (bool, error) {
 	}
 	return false, nil
 }
+
+func reverse(ss []string) []string {
+	last := len(ss) - 1
+	for i := 0; i < len(ss)/2; i++ {
+		ss[i], ss[last-i] = ss[last-i], ss[i]
+	}
+
+	return ss
+}
+
+func DisectPath(path string) []string {
+
+	var paths []string
+	for {
+		temp := filepath.Base(path)
+		if temp == "/" || temp == "." {
+			break
+		}
+
+		path = filepath.Dir(path)
+		paths = append(paths, temp)
+	}
+	return reverse(paths)
+}

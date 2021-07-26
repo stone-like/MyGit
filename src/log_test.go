@@ -3,6 +3,7 @@ package src
 import (
 	"bytes"
 	"fmt"
+	con "mygit/src/database/content"
 	"os"
 	"path/filepath"
 	"testing"
@@ -286,6 +287,152 @@ func Test_LogUninterested(t *testing.T) {
 
 		})
 
+	}
+
+}
+
+func TestCreateFileChange(t *testing.T) {
+
+	//A->Bで指定したfileのchangeのみ表示できるか
+	//A->Bでa.txt,b.txc,c.txtの三つを変化させるが、表示対象はa.txtだけとしたい
+	curDir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	tempPath := filepath.Join(curDir, "tempDir")
+	err = os.MkdirAll(tempPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	aname := CreateFiles(t, tempPath, "a.txt", "prev\n")
+	bname := CreateFiles(t, tempPath, "b.txt", "prev\n")
+	cname := CreateFiles(t, tempPath, "c.txt", "prev\n")
+
+	is := []string{tempPath}
+
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
+	assert.NoError(t, err)
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	f1, err := os.Create(aname)
+	assert.NoError(t, err)
+	defer f1.Close()
+	f1.Write([]byte("changed"))
+
+	f2, err := os.Create(bname)
+	assert.NoError(t, err)
+	defer f2.Close()
+	f2.Write([]byte("changed"))
+
+	f3, err := os.Create(cname)
+	assert.NoError(t, err)
+	defer f3.Close()
+	f3.Write([]byte("changed"))
+
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit2")
+	assert.NoError(t, err)
+
+}
+
+func Test_LogFile(t *testing.T) {
+
+	curDir, err := os.Getwd()
+	assert.NoError(t, err)
+	tempPath := filepath.Join(curDir, "testData/logFileChange")
+	buf := new(bytes.Buffer)
+	err = StartLog(tempPath, []string{"a.txt", "c.txt"}, &LogOption{
+		Patch: true,
+	}, buf)
+	assert.NoError(t, err)
+
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+
+	ret, err := ParseRev("master")
+	assert.NoError(t, err)
+	headObjId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+
+	o, err := repo.d.ReadObject(headObjId)
+	assert.NoError(t, err)
+
+	c, _ := o.(*con.CommitFromMem)
+	headTime := c.Author.ReadableTime()
+
+	ret, err = ParseRev("master^")
+	assert.NoError(t, err)
+	prevObjId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+
+	o, err = repo.d.ReadObject(prevObjId)
+	assert.NoError(t, err)
+
+	c, _ = o.(*con.CommitFromMem)
+	prevTime := c.Author.ReadableTime()
+
+	headAtxtObjId := "21fb1e"
+	headCtxtObjId := "21fb1e"
+	prevAtxtObjId := "7941ff"
+	prevCtxtObjId := "7941ff"
+
+	s := buf.String()
+	expected := fmt.Sprintf(
+		`commit %s
+Author: test <test@example.com>
+Date: %s
+
+     commit2
+
+diff --git a/a.txt b/a.txt
+index %s..%s 100644
+--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
+-prev
++changed
+\ No newline at end of file
+diff --git a/c.txt b/c.txt
+index %s..%s 100644
+--- a/c.txt
++++ b/c.txt
+@@ -1 +1 @@
+-prev
++changed
+\ No newline at end of file
+commit %s
+Author: test <test@example.com>
+Date: %s
+
+     commit1
+
+diff --git a/a.txt b/a.txt
+new file mode 100644
+index 000000..%s
+--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
++prev
+diff --git a/c.txt b/c.txt
+new file mode 100644
+index 000000..%s
+--- a/c.txt
++++ b/c.txt
+@@ -1 +1 @@
++prev
+`, headObjId, headTime, prevAtxtObjId, headAtxtObjId,
+		prevCtxtObjId, headCtxtObjId, prevObjId, prevTime,
+		prevAtxtObjId, prevCtxtObjId,
+	)
+
+	if diff := cmp.Diff(expected, s); diff != "" {
+		t.Errorf("diff is %s\n", diff)
 	}
 
 }

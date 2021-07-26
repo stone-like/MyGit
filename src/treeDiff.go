@@ -17,7 +17,15 @@ func GenerateTreeDiff(repo *Repository) *TreeDiff {
 	}
 }
 
+func (t *TreeDiff) CompareObjIdWithFilter(fromObjId, toObjId string, filter *PathFilter) error {
+	return t.Compare(fromObjId, toObjId, filter)
+}
+
 func (t *TreeDiff) CompareObjId(fromObjId, toObjId string) error {
+	return t.Compare(fromObjId, toObjId, GeneratePathFilter())
+}
+
+func (t *TreeDiff) Compare(fromObjId, toObjId string, filter *PathFilter) error {
 	aObjId := fromObjId
 	bObjId := toObjId
 	if aObjId == bObjId {
@@ -43,11 +51,11 @@ func (t *TreeDiff) CompareObjId(fromObjId, toObjId string) error {
 		bEntries = bTree.Entries
 	}
 
-	err = t.DetectDeletions(aEntries, bEntries)
+	err = t.DetectDeletions(aEntries, bEntries, filter)
 	if err != nil {
 		return err
 	}
-	err = t.DetectAddtions(aEntries, bEntries)
+	err = t.DetectAddtions(aEntries, bEntries, filter)
 	if err != nil {
 		return err
 	}
@@ -55,10 +63,10 @@ func (t *TreeDiff) CompareObjId(fromObjId, toObjId string) error {
 	return nil
 }
 
-func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object) error {
+func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object, filter *PathFilter) error {
 	//aEntriesにはあって、bEntriesにはないものをみつける
-	for k, v := range aEntries {
-		//bEntiesがnilだとしても存在しないindewxを使うとokがfalseになるだけ(nilなので全部存在しないんだけど)
+
+	fn := func(k string, v con.Object) error {
 		path := k
 		other, ok := bEntries[k]
 		ev, evOk := v.(*con.Entry)
@@ -66,11 +74,13 @@ func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object) err
 			return ErrorObjeToEntryConvError
 		}
 
+		subFilter := filter.Join(k)
+
 		if !ok {
 			var aObjId string
 			if ev.IsTree() {
 				aObjId = ev.GetObjId()
-				err := t.CompareObjId(aObjId, "")
+				err := t.CompareObjIdWithFilter(aObjId, "", subFilter)
 
 				if err != nil {
 					return err
@@ -85,7 +95,7 @@ func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object) err
 			}
 
 			if reflect.DeepEqual(ev, eo) {
-				continue
+				return nil
 			}
 
 			var aObjId string
@@ -98,7 +108,7 @@ func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object) err
 				bObjId = eo.GetObjId()
 			}
 
-			err := t.CompareObjId(aObjId, bObjId)
+			err := t.CompareObjIdWithFilter(aObjId, bObjId, subFilter)
 
 			if err != nil {
 				return err
@@ -119,14 +129,22 @@ func (t *TreeDiff) DetectDeletions(aEntries, bEntries map[string]con.Object) err
 
 		}
 
+		return nil
 	}
+
+	err := filter.EachEntry(aEntries, fn)
+
+	if err != nil {
+		return err
+	}
+
 	return nil
+
 }
 
-func (t *TreeDiff) DetectAddtions(aEntries, bEntries map[string]con.Object) error {
+func (t *TreeDiff) DetectAddtions(aEntries, bEntries map[string]con.Object, filter *PathFilter) error {
 	//bEntriesにはあって、aEntriesにはないものをみつける
-
-	for k, v := range bEntries {
+	fn := func(k string, v con.Object) error {
 		path := k
 		_, ok := aEntries[k]
 		ev, evOk := v.(*con.Entry)
@@ -135,18 +153,28 @@ func (t *TreeDiff) DetectAddtions(aEntries, bEntries map[string]con.Object) erro
 		}
 		if ok {
 			//aEntriesにあるものはスキップ
-			continue
+			return nil
 		}
+
+		subFilter := filter.Join(k)
 
 		//ここから先はaEntriesにないもの
 		if ev.IsTree() {
-			err := t.CompareObjId("", ev.GetObjId())
+			err := t.CompareObjIdWithFilter("", ev.GetObjId(), subFilter)
 			if err != nil {
 				return err
 			}
 		} else {
 			t.Changes[path] = []*con.Entry{nil, ev}
 		}
+
+		return nil
+	}
+
+	err := filter.EachEntry(bEntries, fn)
+
+	if err != nil {
+		return err
 	}
 
 	return nil

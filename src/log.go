@@ -13,6 +13,7 @@ import (
 type LogOption struct {
 	IsAbbrev bool
 	Format   string
+	Patch    bool
 }
 
 //optionのdecorationは後で実装,display patchも後で
@@ -32,7 +33,7 @@ func StartLog(rootPath string, args []string, option *LogOption, w io.Writer) er
 	//LogはShowとかの表示用でOptionの情報とかほしい
 	//RevListはCommitの順番のQueueを計算用で余計なOptionとかWriterとかの情報はいらない
 	showFn := func(c *con.CommitFromMem) error {
-		err := ShowCommit(c, option, repo, w)
+		err := ShowCommit(revList, c, option, repo, w)
 		if err != nil {
 			return err
 		}
@@ -79,17 +80,41 @@ func ShowCommitOneLine(c *con.CommitFromMem, option *LogOption, repo *Repository
 	return nil
 }
 
-func ShowCommit(c *con.CommitFromMem, option *LogOption, repo *Repository, w io.Writer) error {
-
-	switch option.Format {
-	case "":
-		return ShowCommitMedium(c, option, repo, w)
-	case "oneline":
-		return ShowCommitOneLine(c, option, repo, w)
-	default:
+func ShowPatch(revList *RevList, c *con.CommitFromMem, option *LogOption, repo *Repository, w io.Writer) error {
+	if !option.Patch {
 		return &er.InvalidFormatError{
 			FormatName: option.Format,
 		}
 	}
+
+	w.Write([]byte("\n"))
+	err := PrintCommitDiff(c.Parent, c.ObjId, repo, revList, w)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ShowCommit(revList *RevList, c *con.CommitFromMem, option *LogOption, repo *Repository, w io.Writer) error {
+
+	switch option.Format {
+	case "":
+		err := ShowCommitMedium(c, option, repo, w)
+		if err != nil {
+			return err
+		}
+	case "oneline":
+		err := ShowCommitOneLine(c, option, repo, w)
+		if err != nil {
+			return err
+		}
+	}
+
+	if option.Patch {
+		return ShowPatch(revList, c, option, repo, w)
+	}
+
+	return nil
 
 }

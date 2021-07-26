@@ -14,6 +14,7 @@ var (
 	SEEN         = ":seen"
 	ADDED        = ":added"
 	UNINTERESTED = ":uninterested"
+	TREE_SAME    = ":treesame"
 )
 
 type RevList struct {
@@ -23,6 +24,9 @@ type RevList struct {
 	flags   map[string]map[string]struct{} //objIdごとにflagsがある、logではすでに見たコミットは重複して表示したくないのでそのフラグ
 	queue   *util.PriorityQueue            //priorityQueue、コミットをコミットの時間順に並べる
 	output  []*con.CommitFromMem           //uninterestingは入れないやつ
+	prune   []string                       // log filepathの時使う
+	diffs   map[string]*TreeDiff           // --patchの時に利用(現在patch実装していないのでいらないけど後々使う)
+	filter  *PathFilter
 }
 
 // A -> B -> C
@@ -111,6 +115,11 @@ func (r *RevList) LimitQueue() error {
 			r.output = append(r.output, c)
 		}
 
+		//logで普通のファイル名が来た時で、変化なしなら表示させる意味ないので
+		if r.IsMarked(c.ObjId, TREE_SAME) {
+			continue
+		}
+
 	}
 
 	//filterしたoutputを新しいqueueにする
@@ -140,6 +149,23 @@ func (r *RevList) OutputCommit(show func(c *con.CommitFromMem) error) error {
 		if !ok {
 			return ErrorObjeToEntryConvError
 		}
+
+		if !r.Limited {
+			//limitedの時はLimitQueueの時AddParentをやったからいいけどLimitedじゃないときはここでやる
+			err := r.AddParent(c)
+			if err != nil {
+				return err
+			}
+		}
+
+		if r.IsMarked(c.ObjId, UNINTERESTED) {
+			continue
+		}
+
+		if r.IsMarked(c.ObjId, TREE_SAME) {
+			continue
+		}
+		//showPatchの場合はHeadだけでいい、Headのparentまでforで回す必要ない
 		err := show(c)
 		if err != nil {
 			return err
@@ -171,6 +197,8 @@ func (r *RevList) AddParent(c *con.CommitFromMem) error {
 
 			if r.IsMarked(c.ObjId, UNINTERESTED) {
 				r.MarkParentUninteresting(parent)
+			} else {
+				r.SimplifyCommit(c)
 			}
 
 			r.EnqueueCommit(parent)
@@ -179,6 +207,28 @@ func (r *RevList) AddParent(c *con.CommitFromMem) error {
 		return nil
 
 	}
+}
+
+func (r *RevList) SimplifyCommit(c *con.CommitFromMem) {
+	if len(r.prune) == 0 {
+		return
+	}
+
+	if !r.TreeDiffChanged(c.Parent, c.ObjId) {
+		r.Mark(c.ObjId, TREE_SAME)
+	}
+
+}
+
+func (r *RevList) GetTreeDiffChange(oldObjId, newObjId string) map[string][]*con.Entry {
+	td := GenerateTreeDiff(r.repo)
+	td.CompareObjIdWithFilter(oldObjId, newObjId, r.filter)
+
+	return td.Changes
+}
+
+func (r *RevList) TreeDiffChanged(oldObjId, newObjId string) bool {
+	return len(r.GetTreeDiffChange(oldObjId, newObjId)) != 0
 }
 
 func GenerateRevList(repo *Repository, branches []string) (*RevList, error) {
@@ -199,6 +249,20 @@ func GenerateRevList(repo *Repository, branches []string) (*RevList, error) {
 			return nil, err
 		}
 	}
+
+	//この時点でqueueがemptyということはfileなのでHEADを対象にhandleRevisionしてあげる
+
+	if r.queue.Queue.Len() == 0 {
+		err := r.HandleRevision("HEAD")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	//PathFilterを作る
+	r.filter = GeneratePathFilterWithTrie(
+		util.GenerateTrieFromPaths(r.prune),
+	)
 
 	return r, nil
 
@@ -277,19 +341,23 @@ func (r *RevList) MarkParentUninteresting(c *con.CommitFromMem) {
 	}
 }
 
-func (r *RevList) HandleRevision(branchName string) error {
+func (r *RevList) HandleRevision(name string) error {
 
-	rangeSlice := dUtil.CheckRegExpSubString(RANGE, branchName)
-	excludeSlice := dUtil.CheckRegExpSubString(EXCLUDE, branchName)
+	rangeSlice := dUtil.CheckRegExpSubString(RANGE, name)
+	excludeSlice := dUtil.CheckRegExpSubString(EXCLUDE, name)
 
-	if len(rangeSlice) != 0 {
+	stat, _ := r.repo.w.StatFile(name)
+	if stat != nil {
+		//branchNameじゃなくてFilePathだった場合
+		r.prune = append(r.prune, name)
+	} else if len(rangeSlice) != 0 {
 		r.SetStartPoint(rangeSlice[0][1], true)
 		r.SetStartPoint(rangeSlice[0][2], false)
 	} else if len(excludeSlice) != 0 {
 		r.SetStartPoint(excludeSlice[0][1], true)
 	} else {
 		//excludeに当てはまらない普通のやつ
-		r.SetStartPoint(branchName, false)
+		r.SetStartPoint(name, false)
 	}
 
 	return nil

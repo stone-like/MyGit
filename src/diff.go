@@ -6,6 +6,7 @@ import (
 	"mygit/src/crypt"
 	data "mygit/src/database"
 	con "mygit/src/database/content"
+	"mygit/util"
 	"path/filepath"
 	"strings"
 
@@ -100,6 +101,10 @@ func CreateTargetFromIndex(path string, repo *Repository, i *data.Index) (*DiffT
 }
 
 func CreateTargetFromEntry(path string, repo *Repository, e *con.Entry) (*DiffTarget, error) {
+
+	if e == nil {
+		return CreateTargetFromNothing(path)
+	}
 
 	o, err := repo.d.ReadObject(e.ObjId)
 	if err != nil {
@@ -271,6 +276,37 @@ func DiffHeadIndex(i *data.Index, s *Status, repo *Repository, w io.Writer) erro
 
 			}
 		}
+	}
+
+	return nil
+}
+
+type Differ interface {
+	GetTreeDiffChange(oldObjId, newObjId string) map[string][]*con.Entry
+}
+
+func PrintCommitDiff(aObjId, bObjId string, repo *Repository, differ Differ, w io.Writer) error {
+	diff := differ.GetTreeDiffChange(aObjId, bObjId)
+
+	ss := util.SortedKeys(diff)
+
+	for _, path := range ss {
+		oldEntry := diff[path][0]
+		newEntry := diff[path][1]
+		aTarget, err := CreateTargetFromEntry(path, repo, oldEntry)
+		if err != nil {
+			return err
+		}
+		bTarget, err := CreateTargetFromEntry(path, repo, newEntry)
+		if err != nil {
+			return err
+		}
+		PrintDiff(
+			aTarget,
+			bTarget,
+			repo,
+			w)
+
 	}
 
 	return nil
