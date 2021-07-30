@@ -160,7 +160,14 @@ func CreateTargetFromNothing(path string) (*DiffTarget, error) {
 }
 
 func DiffIndexWorkSpace(i *data.Index, s *Status, repo *Repository, w io.Writer) error {
-	for path, status := range s.WorkSpaceChanges {
+
+	for _, path := range util.SortedKeys(s.WorkSpaceChanges) {
+		status, ok := s.WorkSpaceChanges[path]
+
+		if !ok {
+			return ErrorInvalidChanges
+		}
+
 		switch status {
 		case WORKSPACE_MODIFIED:
 			{
@@ -204,13 +211,21 @@ func DiffIndexWorkSpace(i *data.Index, s *Status, repo *Repository, w io.Writer)
 				}
 			}
 		}
+
 	}
 
 	return nil
 }
 
 func DiffHeadIndex(i *data.Index, s *Status, repo *Repository, w io.Writer) error {
-	for path, status := range s.IndexChanges {
+
+	for _, path := range util.SortedKeys(s.IndexChanges) {
+		status, ok := s.IndexChanges[path]
+
+		if !ok {
+			return ErrorInvalidChanges
+		}
+
 		switch status {
 		case INDEX_ADDED:
 			{

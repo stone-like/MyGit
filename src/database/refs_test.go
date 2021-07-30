@@ -62,29 +62,3 @@ func Test_AsciiControll(t *testing.T) {
 		})
 	}
 }
-
-func Test_CreateBranchExp(t *testing.T) {
-
-	r := &Refs{}
-
-	for _, d := range []struct {
-		str              string
-		expectedErrorMsg string
-	}{
-		{`.aaaa`, "initialDotContained"},
-		{`aaa/.bbb`, "pathComponentContained"},
-		{`aaa..bbb`, "DiskTraversalContained"},
-		{`/aaabb`, "initialSlashContained"},
-		{`aaaabbb/`, "tailSlashContained"},
-		{`aaa.lock`, "extIsLockError"},
-		{`aaa@{bbb`, "revisionComponentContained"},
-	} {
-		t.Run("check", func(t *testing.T) {
-			objId, err := r.ReadHead()
-			assert.NoError(t, err)
-			err = r.CreateBranch(d.str, objId)
-			assert.NoError(t, err)
-			assert.Equal(t, d.expectedErrorMsg, err.Error())
-		})
-	}
-}

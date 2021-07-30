@@ -88,7 +88,7 @@ func ShowPatch(revList *RevList, c *con.CommitFromMem, option *LogOption, repo *
 	}
 
 	w.Write([]byte("\n"))
-	err := PrintCommitDiff(c.Parent, c.ObjId, repo, revList, w)
+	err := PrintCommitDiff(c.FirstParent(), c.ObjId, repo, revList, w)
 	if err != nil {
 		return err
 	}

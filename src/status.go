@@ -7,6 +7,7 @@ import (
 	data "mygit/src/database"
 	con "mygit/src/database/content"
 	"mygit/src/database/lock"
+	"mygit/src/database/util"
 	"os"
 	"path/filepath"
 )
@@ -223,6 +224,10 @@ func (s *Status) IntitializeStatus(repo *Repository, i *data.Index) error {
 	if err != nil {
 		return err
 	}
+
+	//最後にpath順にソート
+	util.SortStringSlice(s.Changed)
+	//mapのindexChangedとworkspaceChangedは使う側でソート
 
 	return nil
 }

@@ -77,11 +77,7 @@ func Test_ReadFromFile(t *testing.T) {
 	cur, err := os.Getwd()
 	assert.NoError(t, err)
 
-	m := make(map[string]con.Object)
-	i := &Index{
-		Path:    filepath.Join(cur, "testData/testindex"),
-		Entries: m,
-	}
+	i := GenerateIndex(filepath.Join(cur, "testData/testindex"))
 
 	err = i.Load()
 	assert.NoError(t, err)

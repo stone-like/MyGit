@@ -1,7 +1,6 @@
 package src
 
 import (
-	"bytes"
 	con "mygit/src/database/content"
 	"os"
 	"path/filepath"
@@ -11,40 +10,40 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_CompareTwoCommit(t *testing.T) {
-	curDir, err := os.Getwd()
-	assert.NoError(t, err)
+// func Test_CompareTwoCommit(t *testing.T) {
+// 	curDir, err := os.Getwd()
+// 	assert.NoError(t, err)
 
-	tempPath := filepath.Join(curDir, "tempDir")
-	err = os.MkdirAll(tempPath, os.ModePerm)
-	assert.NoError(t, err)
+// 	tempPath := filepath.Join(curDir, "tempDir")
+// 	err = os.MkdirAll(tempPath, os.ModePerm)
+// 	assert.NoError(t, err)
 
-	xxxPath := filepath.Join(tempPath, "xxx")
-	err = os.MkdirAll(xxxPath, os.ModePerm)
-	assert.NoError(t, err)
+// 	xxxPath := filepath.Join(tempPath, "xxx")
+// 	err = os.MkdirAll(xxxPath, os.ModePerm)
+// 	assert.NoError(t, err)
 
-	CreateFiles(t, tempPath, "hello.txt", "test\n")
-	dummyName := CreateFiles(t, xxxPath, "dummy.txt", "test2\n")
+// 	CreateFiles(t, tempPath, "hello.txt", "test\n")
+// 	dummyName := CreateFiles(t, xxxPath, "dummy.txt", "test2\n")
 
-	is := []string{tempPath}
-	var buf bytes.Buffer
-	err = StartInit(is, &buf)
-	assert.NoError(t, err)
-	ss := []string{"."}
-	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
-	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
-	assert.NoError(t, err)
+// 	is := []string{tempPath}
+// 	var buf bytes.Buffer
+// 	err = StartInit(is, &buf)
+// 	assert.NoError(t, err)
+// 	ss := []string{"."}
+// 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+// 	assert.NoError(t, err)
+// 	err = StartCommit(tempPath, "test", "test@example.com", "test")
+// 	assert.NoError(t, err)
 
-	os.Remove(dummyName)
-	CreateFiles(t, xxxPath, "dummy2.txt", "test\n")
-	err = os.RemoveAll(filepath.Join(curDir, "tempDir/.git/index"))
-	assert.NoError(t, err)
-	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
-	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
-	assert.NoError(t, err)
-}
+// 	os.Remove(dummyName)
+// 	CreateFiles(t, xxxPath, "dummy2.txt", "test\n")
+// 	err = os.RemoveAll(filepath.Join(curDir, "tempDir/.git/index"))
+// 	assert.NoError(t, err)
+// 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+// 	assert.NoError(t, err)
+// 	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+// 	assert.NoError(t, err)
+// }
 
 func Test_TreeDiff(t *testing.T) {
 	a := "ea7c3064d57fa1b07b4da70bb7a534d42da7bd7f"

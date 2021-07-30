@@ -2,7 +2,6 @@ package src
 
 import (
 	"fmt"
-	data "mygit/src/database"
 	con "mygit/src/database/content"
 	"path/filepath"
 )
@@ -10,110 +9,156 @@ import (
 func StartCommit(rootPath, uName, uEmail, message string) error {
 	gitPath := filepath.Join(rootPath, ".git")
 	dbPath := filepath.Join(gitPath, "objects")
-	indexPath := filepath.Join(gitPath, "index")
+	// indexPath := filepath.Join(gitPath, "index")
+
+	repo := GenerateRepository(rootPath, gitPath, dbPath)
 
 	// w := &WorkSpace{
 	// 	Path: rootPath,
 	// }
 
-	d := &data.Database{
-		Path: dbPath,
+	// d := &data.Database{
+	// 	Path: dbPath,
+	// }
+
+	// i := data.GenerateIndex(indexPath)
+
+	// r := &data.Refs{
+	// 	Path: gitPath,
+	// }
+
+	err := repo.i.Load()
+	if err != nil {
+		return err
 	}
 
-	i := data.GenerateIndex(indexPath)
+	// tm := make(map[string]con.Object)
+	// t := &con.Tree{
+	// 	Entries: tm,
+	// }
 
-	r := &data.Refs{
-		Path: gitPath,
-	}
-
-	// pathList, err := w.ListFiles(rootPath)
+	// es, err := i.GetEntries()
 
 	// if err != nil {
 	// 	return err
 	// }
 
-	// var entryList []*con.Entry
+	// t.Build(es)
+	// // t.GenerateObjId()
 
-	// for _, path := range pathList {
-	// 	c, err := w.ReadFile(path)
+	// t.Traverse(func(t *con.Tree) {
+	// 	d.Store(t)
+	// })
 
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	// fmt.Printf("tree: %s\n", t.GetObjId())
 
-	// 	b := &con.Blob{
-	// 		Content: c,
-	// 	}
+	// author := con.GenerateAuthor(uName, uEmail)
 
-	// 	// bcontent := d.CreateContent(b)
-	// 	// d.SetObjId(b, bcontent)
-	// 	d.Store(b)
-
-	// 	stat, err := w.StatFile(path)
-
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	entryList = append(entryList, &con.Entry{
-	// 		Mode:  int(stat.Mode()),
-	// 		Path:  path,
-	// 		ObjId: b.ObjId,
-	// 	})
+	// parent, err := r.ReadHead()
+	// if err != nil {
+	// 	return err
 	// }
-	// m := make(map[string]con.Object)
 
-	err := i.Load()
+	// commit := &con.Commit{
+	// 	ObjId:   t.GetObjId(),
+	// 	Parents: []string{parent},
+	// 	Tree:    t,
+	// 	Author:  author,
+	// 	Message: message,
+	// }
+
+	parent, err := repo.r.ReadHead()
 	if err != nil {
 		return err
 	}
 
-	tm := make(map[string]con.Object)
-	t := &con.Tree{
-		Entries: tm,
-	}
-
-	es, err := i.GetEntries()
-
+	err = WriteCommit([]string{parent}, uName, uEmail, message, repo)
 	if err != nil {
 		return err
 	}
 
-	t.Build(es)
-	// t.GenerateObjId()
+	// d.Store(commit)
 
-	t.Traverse(func(t *con.Tree) {
-		d.Store(t)
-	})
+	// r.UpdateHead(commit.ObjId)
 
-	fmt.Printf("tree: %s\n", t.GetObjId())
+	// var rootMessage string
+	// if len(parent) == 0 {
+	// 	rootMessage = "(root-commit) "
+	// } else {
+	// 	rootMessage = ""
+	// }
 
-	author := con.GenerateAuthor(uName, uEmail)
+	// fmt.Printf("[%s %s] %s", rootMessage, commit.GetObjId(), message)
 
-	parent, err := r.ReadHead()
+	return nil
+}
+
+func CreateCommit(parents []string, name, email, message string, repo *Repository) (*con.Commit, error) {
+
+	t, err := CreateTree(repo)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	author := con.GenerateAuthor(name, email)
 
 	commit := &con.Commit{
 		ObjId:   t.GetObjId(),
-		Parent:  parent,
+		Parents: parents,
 		Tree:    t,
 		Author:  author,
 		Message: message,
 	}
 
-	d.Store(commit)
+	return commit, nil
+}
 
-	r.UpdateHead(commit.ObjId)
+func WriteCommit(parents []string, name, email, message string, repo *Repository) error {
+
+	c, err := CreateCommit(parents, name, email, message, repo)
+	if err != nil {
+		return err
+	}
+
+	WriteTree(c.Tree, repo)
+
+	repo.d.Store(c)
+
+	err = repo.r.UpdateHead(c.ObjId)
+	if err != nil {
+		return err
+	}
 
 	var rootMessage string
-	if len(parent) == 0 {
+	if len(parents) == 0 {
 		rootMessage = "(root-commit) "
 	} else {
 		rootMessage = ""
 	}
 
-	fmt.Printf("[%s %s] %s", rootMessage, commit.GetObjId(), message)
+	fmt.Printf("[%s %s] %s", rootMessage, c.GetObjId(), message)
 
 	return nil
+
+}
+
+func CreateTree(repo *Repository) (*con.Tree, error) {
+	t := con.GenerateTree()
+
+	es, err := repo.i.GetEntries()
+
+	if err != nil {
+		return nil, err
+	}
+
+	t.Build(es)
+
+	return t, nil
+}
+
+func WriteTree(t *con.Tree, repo *Repository) {
+	t.Traverse(func(t *con.Tree) {
+		repo.d.Store(t)
+	})
+	fmt.Printf("tree: %s\n", t.GetObjId())
 }

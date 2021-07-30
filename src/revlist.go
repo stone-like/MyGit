@@ -9,7 +9,7 @@ import (
 //別にすでに見たかどうかだけならflagsはmap[string]boolでいいんだけどブランチのExcludeとか実装するとflagが複数種類必要だから
 
 //SEENはQUEUEに自分を追加したとき
-//ADDEDはQUEUEに親を追加したときとき
+//ADDEDはQUEUEに親を追加したとき
 var (
 	SEEN         = ":seen"
 	ADDED        = ":added"
@@ -181,27 +181,62 @@ func (r *RevList) AddParent(c *con.CommitFromMem) error {
 	} else {
 		r.Mark(c.ObjId, ADDED)
 
-		if c.Parent != "" {
-			o, err := r.repo.d.ReadObject(c.Parent)
+		if len(c.Parents) != 0 {
 
-			if err != nil {
-				return err
-			}
-
-			//objIdからコミットまで持ってくるのは時間の情報が欲しいから
-			parent, ok := o.(*con.CommitFromMem)
-
-			if !ok {
-				return ErrorObjeToEntryConvError
-			}
-
+			var parents []*con.CommitFromMem
 			if r.IsMarked(c.ObjId, UNINTERESTED) {
-				r.MarkParentUninteresting(parent)
+
+				for _, p := range c.Parents {
+					o, err := r.repo.d.ReadObject(p)
+
+					if err != nil {
+						return err
+					}
+
+					//objIdからコミットまで持ってくるのは時間の情報が欲しいから
+					parent, ok := o.(*con.CommitFromMem)
+
+					if !ok {
+						return ErrorObjeToEntryConvError
+					}
+
+					r.MarkParentUninteresting(parent)
+					parents = append(parents, parent)
+				}
 			} else {
-				r.SimplifyCommit(c)
+				//simplyCommitでもfileだけではなく普通のbranchを扱うことに注意
+				//simplyCommitでTreeSameとなった親のみ表示
+				// A -> B  ->  D [master]
+				//    \   /
+				//      C   [topic]の例でいえば、hello.txtはAでtest,Bでchanged,Dで変わらずchangedとなっているとして、
+				//DからBのみTreeSameなのでBのルートのみをとり、かつD自体はTreeSameなのでOutput時にスルー
+				//B->A、A->nilはtreeDiffがあるのでそれをoutput
+
+				simpleParents, err := r.SimplifyCommit(c)
+				if err != nil {
+					return err
+				}
+
+				for _, p := range simpleParents {
+					o, err := r.repo.d.ReadObject(p)
+
+					if err != nil {
+						return err
+					}
+
+					//objIdからコミットまで持ってくるのは時間の情報が欲しいから
+					parent, ok := o.(*con.CommitFromMem)
+
+					if !ok {
+						return ErrorObjeToEntryConvError
+					}
+					parents = append(parents, parent)
+				}
 			}
 
-			r.EnqueueCommit(parent)
+			for _, p := range parents {
+				r.EnqueueCommit(p)
+			}
 		}
 
 		return nil
@@ -209,14 +244,28 @@ func (r *RevList) AddParent(c *con.CommitFromMem) error {
 	}
 }
 
-func (r *RevList) SimplifyCommit(c *con.CommitFromMem) {
+func (r *RevList) SimplifyCommit(c *con.CommitFromMem) ([]string, error) {
 	if len(r.prune) == 0 {
-		return
+		return c.Parents, nil
 	}
 
-	if !r.TreeDiffChanged(c.Parent, c.ObjId) {
-		r.Mark(c.ObjId, TREE_SAME)
+	var parents []string
+
+	if len(c.Parents) != 0 {
+		parents = c.Parents
+	} else {
+		parents = []string{""} //treeDiffで比べるためにParentが存在しないなら""と比較させる
 	}
+
+	for _, p := range parents {
+		if !r.TreeDiffChanged(p, c.ObjId) {
+			r.Mark(c.ObjId, TREE_SAME)
+
+			return []string{p}, nil
+		}
+	}
+
+	return c.Parents, nil
 
 }
 
@@ -319,24 +368,30 @@ func (r *RevList) SetStartPoint(branchName string, uninteresting bool) error {
 }
 
 func (r *RevList) MarkParentUninteresting(c *con.CommitFromMem) {
+
+	tempSlice := make([]string, 0, len(c.Parents))
+
+	tempSlice = append(tempSlice, c.Parents...)
+
 	for {
 
-		if c == nil || c.Parent == "" {
+		if len(tempSlice) == 0 {
 			break
 		}
 
-		if r.IsMarked(c.Parent, UNINTERESTED) {
+		objId := tempSlice[0]
+		tempSlice = tempSlice[1:]
+
+		if r.IsMarked(objId, UNINTERESTED) {
 			break
 		}
 
-		r.Mark(c.Parent, UNINTERESTED)
+		r.Mark(objId, UNINTERESTED)
 
-		pc, ok := r.commits[c.Parent]
+		pc, ok := r.commits[objId]
 
 		if ok {
-			c = pc
-		} else {
-			c = nil
+			tempSlice = append(tempSlice, pc.Parents...)
 		}
 	}
 }

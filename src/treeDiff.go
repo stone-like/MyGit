@@ -10,6 +10,19 @@ type TreeDiff struct {
 	repo    *Repository
 }
 
+func TreeDiffGenerateAndCompareCommit(fromObjId, toObjId string, repo *Repository) (*TreeDiff, error) {
+	t := &TreeDiff{
+		Changes: make(map[string][]*con.Entry),
+		repo:    repo,
+	}
+
+	err := t.CompareObjId(fromObjId, toObjId)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 func GenerateTreeDiff(repo *Repository) *TreeDiff {
 	return &TreeDiff{
 		Changes: make(map[string][]*con.Entry),

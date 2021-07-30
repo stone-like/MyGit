@@ -3,10 +3,12 @@ package src
 import (
 	"bytes"
 	"fmt"
+	er "mygit/src/errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,7 +57,12 @@ func Test_ConflictUntrackParent(t *testing.T) {
 	var buf bytes.Buffer
 	//HEAD->HEAD^に戻す
 	err = StartCheckout(rootPath, []string{"@^"}, &buf)
-	assert.NoError(t, err)
+
+	e := err.(*er.ConflictOccurError)
+
+	if diff := cmp.Diff("error: The following untracked working tree files would be overwritten by checkout:\n\txxx/dummy.txt\nPlease move or remove them before you switch branches.\n", e.ConflictDetail); diff != "" {
+		t.Errorf("diff is :%s\n", diff)
+	}
 
 }
 

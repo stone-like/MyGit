@@ -153,7 +153,7 @@ func Test_RecursiveTree(t *testing.T) {
 			Content: con,
 		}
 
-		stat, err := w.StatFile(filepath.Join(w.Path, path))
+		stat, err := w.StatFile(path)
 		assert.NoError(t, err)
 		entryList = append(entryList, &c.Entry{
 			Mode:  int(stat.Mode()),
@@ -162,10 +162,7 @@ func Test_RecursiveTree(t *testing.T) {
 		})
 	}
 
-	m := make(map[string]c.Object)
-
-	tr := &c.Tree{Entries: m}
-
+	tr := c.GenerateTree()
 	tr.Build(entryList)
 
 	fooState, _ := os.Stat(fooPath)
@@ -174,29 +171,30 @@ func Test_RecursiveTree(t *testing.T) {
 		ObjId: "",
 		Mode:  int(fooState.Mode()),
 	}
+	//windowsでは\\,linuxでは/になるがこれをテストでどうすればいいか悩む
 	barState, _ := os.Stat(barPath)
 	barEntry := &c.Entry{
-		Path:  "foo\\bar.txt",
+		Path:  "foo/bar.txt",
 		ObjId: "",
 		Mode:  int(barState.Mode()),
 	}
 
 	testState, _ := os.Stat(testPath)
 	testEntry := &c.Entry{
-		Path:  "foo\\bar\\test.txt",
+		Path:  "foo/bar/test.txt",
 		ObjId: "",
 		Mode:  int(testState.Mode()),
 	}
 	test2State, _ := os.Stat(test2Path)
 	test2Entry := &c.Entry{
-		Path:  "foo\\bar\\test2.txt",
+		Path:  "foo/bar/test2.txt",
 		ObjId: "",
 		Mode:  int(test2State.Mode()),
 	}
 
 	fooBarTreeMap := map[string]c.Object{
-		"foo\\bar\\test.txt":  testEntry,
-		"foo\\bar\\test2.txt": test2Entry,
+		"foo/bar/test.txt":  testEntry,
+		"foo/bar/test2.txt": test2Entry,
 	}
 
 	fooBarTree := &c.Tree{
@@ -204,8 +202,8 @@ func Test_RecursiveTree(t *testing.T) {
 	}
 
 	fooTreeMap := map[string]c.Object{
-		"foo\\bar.txt": barEntry,
-		"foo\\bar":     fooBarTree,
+		"foo/bar.txt": barEntry,
+		"foo/bar":     fooBarTree,
 	}
 
 	fooTree := &c.Tree{

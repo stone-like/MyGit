@@ -12,7 +12,7 @@ type Commit struct {
 	Tree    *Tree
 	Author  *Author
 	Message string
-	Parent  string
+	Parents []string
 }
 
 func (c *Commit) Type() string {
@@ -24,8 +24,10 @@ func (c *Commit) ToString() string {
 	var str string
 	str = str + fmt.Sprintf("tree %s\n", c.Tree.GetObjId())
 
-	if len(c.Parent) != 0 {
-		str = str + fmt.Sprintf("parent %s\n", c.Parent)
+	if len(c.Parents) != 0 {
+		for _, p := range c.Parents {
+			str = str + fmt.Sprintf("parent %s\n", p)
+		}
 	}
 
 	str = str + fmt.Sprintf("author %s\n", c.Author.ToString())
@@ -57,7 +59,7 @@ type CommitFromMem struct {
 	Tree    string
 	Author  *Author
 	Message string
-	Parent  string
+	Parents []string
 }
 
 func (c *CommitFromMem) SetObjId(objId string) {
@@ -77,6 +79,14 @@ func (c *CommitFromMem) GetFirstLineMessage() string {
 	return s[0]
 }
 
+func (c *CommitFromMem) FirstParent() string {
+
+	if len(c.Parents) == 0 {
+		return ""
+	}
+	return c.Parents[0]
+}
+
 func (c *CommitFromMem) Parse(r io.Reader) error {
 	s := bufio.NewScanner(r)
 
@@ -91,7 +101,7 @@ func (c *CommitFromMem) Parse(r io.Reader) error {
 			//tree,parentの時
 
 			if words[0] == "parent" {
-				c.Parent = words[1]
+				c.Parents = append(c.Parents, words[1])
 			} else {
 				//treeの時
 				c.Tree = words[1]

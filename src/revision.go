@@ -21,7 +21,8 @@ func (rf *Ref) ToString() string {
 }
 
 type Parent struct {
-	Rev BranchObj
+	Rev       BranchObj
+	ParentNum int
 }
 
 func (rv *Parent) ToString() string {
@@ -46,11 +47,19 @@ var aliasMap = map[string]string{
 }
 
 var (
-	PARENT   = `^(.+)\^$`
+	PARENT   = `^(.+)\^(\d*)$`
 	ANCESTOR = `^(.+)~(\d+)$`
 )
 
+func CommitParentWithMultipleParentVersion(objId string, parentNum int, repo *Repository) (string, error) {
+	return CommitParents(objId, parentNum, repo)
+}
+
 func CommitParent(objId string, repo *Repository) (string, error) {
+	return CommitParents(objId, 1, repo)
+}
+
+func CommitParents(objId string, parentNum int, repo *Repository) (string, error) {
 	o, err := LoadTypedObject(objId, "commit", repo)
 
 	if err != nil {
@@ -59,7 +68,7 @@ func CommitParent(objId string, repo *Repository) (string, error) {
 	//LoadTypedObjectでコミットであることは確定
 	c, _ := o.(*con.CommitFromMem)
 
-	return c.Parent, nil
+	return c.Parents[parentNum-1], nil
 
 }
 
@@ -99,7 +108,7 @@ func ResolveRev(obj BranchObj, repo *Repository) (string, error) {
 			return "", err
 		}
 
-		targetObjId, err := CommitParent(objId, repo)
+		targetObjId, err := CommitParentWithMultipleParentVersion(objId, v.ParentNum, repo)
 		if err != nil {
 			return "", AddInfoToObjConvertionError(objId, err)
 		}
@@ -245,8 +254,23 @@ func ParseRev(branchName string) (BranchObj, error) {
 			return nil, err
 		}
 
+		var parentNum int
+
+		//targetStringと一つ目のヒットと二つ目のヒットで合計3
+		if len(parentExp[0]) == 3 && parentExp[0][2] != "" {
+			//parentNumまで正規表現でヒットした場合
+			i, err := strconv.Atoi(parentExp[0][2])
+			if err != nil {
+				return nil, err
+			}
+			parentNum = i
+		} else {
+			parentNum = 1
+		}
+
 		return &Parent{
-			Rev: rev,
+			Rev:       rev,
+			ParentNum: parentNum,
 		}, nil
 
 	}

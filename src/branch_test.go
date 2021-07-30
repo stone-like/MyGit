@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	data "mygit/src/database"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,30 +13,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
-
-func Test_BranchUpdateRef(t *testing.T) {
-	fn := Prepare(t)
-
-	t.Cleanup(fn)
-	curDir, err := os.Getwd()
-	assert.NoError(t, err)
-	tempPath := filepath.Join(curDir, "tempDir")
-	buf := new(bytes.Buffer)
-	err = StartBranch(tempPath, []string{"master"}, &BranchOption{}, buf)
-	assert.NoError(t, err)
-
-	gitPath := filepath.Join(tempPath, ".git")
-
-	expectedContent, err := ioutil.ReadFile(gitPath + "/HEAD")
-	assert.NoError(t, err)
-
-	targetPath := filepath.Join(gitPath, "refs/heads/master")
-	_, err = os.Stat(targetPath)
-	assert.NoError(t, err)
-	targetContent, err := ioutil.ReadFile(targetPath)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedContent, targetContent)
-}
 
 func PrepareThreeCommit(t *testing.T) func() {
 	curDir, err := os.Getwd()
@@ -94,7 +71,7 @@ func Test_CreateBranch(t *testing.T) {
 	assert.NoError(t, err)
 	tempPath := filepath.Join(curDir, "tempDir")
 	buf := new(bytes.Buffer)
-	err = StartBranch(tempPath, []string{"master", "@^^"}, &BranchOption{}, buf)
+	err = StartBranch(tempPath, []string{"test", "@^^"}, &BranchOption{}, buf)
 	assert.NoError(t, err)
 
 	ret, err := ParseRev("@^^")
@@ -106,7 +83,7 @@ func Test_CreateBranch(t *testing.T) {
 	objId, err := ResolveRev(ret, repo)
 	assert.NoError(t, err)
 
-	targetPath := filepath.Join(gitPath, "refs/heads/master")
+	targetPath := filepath.Join(gitPath, "refs/heads/test")
 	_, err = os.Stat(targetPath)
 	assert.NoError(t, err)
 	targetContent, err := ioutil.ReadFile(targetPath)
@@ -254,4 +231,32 @@ func Test_ListBranchVerbose(t *testing.T) {
 		t.Errorf("diff is %s\n", diff)
 	}
 
+}
+
+func Test_CreateBranchExp(t *testing.T) {
+
+	fn := PrepareThreeCommit(t)
+	t.Cleanup(fn)
+
+	r := &data.Refs{Path: gitPath}
+
+	for _, d := range []struct {
+		str              string
+		expectedErrorMsg string
+	}{
+		{`.aaaa`, "initialDotContained"},
+		{`aaa/.bbb`, "pathComponentContained"},
+		{`aaa..bbb`, "DiskTraversalContained"},
+		{`/aaabb`, "initialSlashContained"},
+		{`aaaabbb/`, "tailSlashContained"},
+		{`aaa.lock`, "extIsLockError"},
+		{`aaa@{bbb`, "revisionComponentContained"},
+	} {
+		t.Run("check", func(t *testing.T) {
+			objId, err := r.ReadHead()
+			assert.NoError(t, err)
+			err = r.CreateBranch(d.str, objId)
+			assert.Equal(t, d.expectedErrorMsg, err.Error())
+		})
+	}
 }

@@ -22,3 +22,35 @@ func SortKeysReverse(keys []string) []string {
 
 	return keys
 }
+
+func HasKey(m interface{}, key string) bool {
+	for _, k := range SortedKeys(m) {
+		if k == key {
+			return true
+		}
+	}
+
+	return false
+}
+
+func Copy(m1, m2 interface{}) {
+	m := reflect.ValueOf(m1)
+	iter := reflect.ValueOf(m2).MapRange()
+	for iter.Next() {
+		m.SetMapIndex(iter.Key(), iter.Value())
+	}
+}
+
+//map[string]struct{}としてmapをsetとして使っている
+func IsContainOtherSet(targetMap, otherMap map[string]struct{}) bool {
+
+	for k, _ := range otherMap {
+		_, ok := targetMap[k]
+		if !ok {
+			return false
+		}
+
+	}
+
+	return true
+}

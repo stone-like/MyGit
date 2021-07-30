@@ -10,6 +10,18 @@ import (
 	"strings"
 )
 
+func RemovedSlice(s []string, e []string) []string {
+	var result []string
+	for _, v := range e {
+		if !Contains(s, v) {
+			//sの中でeに入っていないやつだけを取得
+			result = append(result, v)
+		}
+	}
+
+	return result
+}
+
 func Contains(s []string, e string) bool {
 	for _, v := range s {
 		if e == v {
