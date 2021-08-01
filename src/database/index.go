@@ -10,7 +10,6 @@ import (
 	con "mygit/src/database/content"
 	"mygit/src/database/util"
 	"os"
-	"sort"
 )
 
 var (
@@ -31,22 +30,42 @@ var ErrorEntriesNotExists = errors.New("invalid path for Entries")
 
 type Index struct {
 	Path    string
-	Entries map[string]con.Object
-	Keys    []string
+	Entries EntriesMap
+	Keys    KeysSlice
 	Changed bool
 	Parents map[string][]string
+}
+
+func (i *Index) IsConflicted() bool {
+
+	for _, v := range i.Entries {
+		e, _ := v.(*con.Entry)
+
+		if e.GetStage() > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func GenerateIndex(path string) *Index {
 	return &Index{
 		Path:    path,
-		Entries: make(map[string]con.Object),
+		Entries: make(EntriesMap),
 		Parents: make(map[string][]string),
 	}
 }
 
+func (i *Index) EntryForPathWithStage(path string, stage int) (*con.Entry, bool) {
+	return i.RunEntryForPath(path, stage)
+}
+
 func (i *Index) EntryForPath(path string) (*con.Entry, bool) {
-	o, ok := i.Entries[path]
+	return i.RunEntryForPath(path, 0)
+}
+
+func (i *Index) RunEntryForPath(path string, stage int) (*con.Entry, bool) {
+	o, ok := i.Entries.GetValue(path, stage)
 
 	if !ok {
 		return nil, false
@@ -62,14 +81,21 @@ func (i *Index) EntryForPath(path string) (*con.Entry, bool) {
 }
 
 func (i *Index) IsIndexed(path string) bool {
-	_, entOk := i.Entries[path]
+	entOk := i.IsIndexedFile(path)
 	_, parOk := i.Parents[path]
 
 	return entOk || parOk
 }
 func (i *Index) IsIndexedFile(path string) bool {
-	_, entOk := i.Entries[path]
+	//stage0~3の内どれか一つでもあればTrackedile
+	var entOk bool
+	for _, num := range []int{0, 1, 2, 3} {
+		_, ok := i.Entries.GetValue(path, num)
 
+		if ok {
+			entOk = true
+		}
+	}
 	return entOk
 }
 
@@ -79,21 +105,34 @@ var ErrorObjeToEntryConvError = errors.New("conversion error object to entry")
 
 func (i *Index) GetEntries() ([]*con.Entry, error) {
 
-	es := make([]*con.Entry, len(i.Keys))
-	for ind, k := range i.Keys {
-		e, ok := i.Entries[k].(*con.Entry)
+	es := make([]*con.Entry, 0, len(i.Keys))
+
+	entryKeys := i.Entries.GetSortedkey()
+
+	for _, k := range entryKeys {
+		o, ok := i.Entries.GetValue(k.Path, k.Stage)
+		if !ok {
+			return nil, ErrorEntriesNotExists
+		}
+		e, ok := o.(*con.Entry)
 
 		if !ok {
 			return nil, ErrorObjeToEntryConvError
 		}
-		es[ind] = e
+		es = append(es, e)
 	}
 
 	return es, nil
 }
 
 func (i *Index) RemoveEntry(path string) {
-	o, ok := i.Entries[path]
+	for _, num := range []int{0, 1, 2, 3} {
+		i.RemoveEntryWithStage(path, num)
+	}
+}
+
+func (i *Index) RemoveEntryWithStage(path string, stage int) {
+	o, ok := i.Entries.GetValue(path, stage)
 	if !ok {
 		return
 	}
@@ -103,12 +142,21 @@ func (i *Index) RemoveEntry(path string) {
 		return
 	}
 
-	newKeys := util.DeleteSpecificKey(i.Keys, path)
+	ek := EntryKey{
+		Path:  path,
+		Stage: stage,
+	}
 
-	i.Keys = newKeys
-	newMap := util.DeleteFromMap(i.Entries, path)
+	i.Keys = i.Keys.Delete(ek)
 
-	i.Entries = newMap
+	delete(i.Entries, EntryKey{
+		Path:  path,
+		Stage: stage,
+	})
+
+	// newMap := util.DeleteFromMap(i.Entries, path)
+
+	// i.Entries = newMap
 
 	//例えばpath=nested/bob.txtだとして、Parents[nested] -> nested/bob.txtがあるとき
 	//Parents[nested]からnested/bob.txtを削除する
@@ -124,12 +172,12 @@ func (i *Index) RemoveEntry(path string) {
 
 }
 
-func (i *Index) RemoveChildren(e *con.Entry) {
+func (i *Index) RemoveChildren(path string) {
 	//removeChildrenはparentsのvaluesを削除する
 	//例として、nested/bob.txtがあったとして、nestedをaddしたとき、
 	//Parentにはnested -> nested/bob.txtがある
 	//path=nestedでParentsをみると、そのchildrenを削除
-	children, ok := i.Parents[e.Path]
+	children, ok := i.Parents[path]
 
 	if ok {
 		for _, c := range children {
@@ -142,7 +190,7 @@ func (i *Index) DiscardConflicts(e *con.Entry) error {
 	for _, p := range e.ParentDirs(e.Path) {
 		i.RemoveEntry(p) //dummy.txt -> dummy.txt/nested.txtのときに対応
 	}
-	i.RemoveChildren(e) //dummy.txt/nested.txt -> dummy.txtの時に対応
+	i.RemoveChildren(e.Path) //dummy.txt/nested.txt -> dummy.txtの時に対応
 
 	return nil
 }
@@ -156,7 +204,8 @@ func (i *Index) Add(path, objId string, stat con.FileState, createIndexEntry Cre
 		return err
 	}
 
-	i.StoreEntry(e, path)
+	//通常のindexのstageは0
+	i.StoreEntry(e)
 	i.Changed = true
 
 	return nil
@@ -182,14 +231,43 @@ func (i *Index) StoreParent(e *con.Entry) {
 	}
 }
 
-func (i *Index) StoreEntry(e *con.Entry, path string) {
+//resolveMargeのconflictはmap[string][]*con.Entryで必ずbase,left,rightの順番になっている
+//rangeによって変動するのはmapのときでsliceに[base,left,right]の順番で入れるようにしているので、indexとの対応関係もok
+
+func (i *Index) AddConflictSet(path string, conflictEntries []*con.Entry) error {
+	i.RemoveEntryWithStage(path, 0) //conflict時には通常状態を表すstage0を削除
+
+	for ind, e := range conflictEntries {
+
+		if e == nil {
+			//nilの時はcontinueすることで、[base,nil,right]でもしっかりrightのstageは3となりstageの整合性が保たれる
+			continue
+		}
+
+		//index 1 -> base
+		//index 2 -> left
+		//index 3 -> right
+		e := con.CreateEntryFromDB(ind+1, path, e)
+		i.StoreEntry(e)
+	}
+
+	i.Changed = true
+
+	return nil
+}
+
+func (i *Index) StoreEntry(e *con.Entry) {
 	//pathが同じだったらcreateではなくupdateしたいはず
 
-	if util.Contains(i.Keys, path) {
-		i.Entries[path] = e
+	key := EntryKey{
+		Path:  e.Path,
+		Stage: e.GetStage(),
+	}
+	if i.Keys.Contains(key) {
+		i.Entries[key] = e
 	} else {
-		i.Keys = append(i.Keys, path)
-		i.Entries[path] = e
+		i.Keys = append(i.Keys, key)
+		i.Entries[key] = e
 	}
 
 	i.StoreParent(e)
@@ -209,18 +287,8 @@ func (i *Index) CreateIndexEntry(path, objId string, stat con.FileState, createI
 
 func (i *Index) Remove(path string) {
 
-	o, ok := i.Entries[path]
-	if !ok {
-		return
-	}
-
-	e, ok := o.(*con.Entry)
-	if !ok {
-		return
-	}
-
 	i.RemoveEntry(path)
-	i.RemoveChildren(e)
+	i.RemoveChildren(path)
 	i.Changed = true
 }
 
@@ -260,14 +328,23 @@ func (i *Index) WriteContent(f *os.File, path string) error {
 
 	tempStr += buf.String()
 
-	sort.Strings(i.Keys)
+	// sort.Strings(i.Keys)
 
-	sort.Slice(i.Keys, func(j, k int) bool {
-		return len(i.Keys[j]) < len(i.Keys[k])
-	})
+	// sort.Slice(i.Keys, func(j, k int) bool {
+	// 	return len(i.Keys[j]) < len(i.Keys[k])
+	// })
 
-	for _, k := range i.Keys {
-		tempStr += i.Entries[k].ToString()
+	// for _, k := range i.Keys {
+	// 	tempStr += i.Entries[k].ToString()
+	// }
+
+	for _, k := range i.Entries.GetSortedkey() {
+
+		o, ok := i.Entries.GetValue(k.Path, k.Stage)
+		if !ok {
+			return ErrorEntriesNotExists
+		}
+		tempStr += o.ToString()
 	}
 
 	content := crypt.DigestBySha1(tempStr)
@@ -366,12 +443,12 @@ func (i *Index) ReadEntries(r io.Reader, cs *CheckSum, count int) error {
 			}
 		}
 
-		e, path, err := i.ParseEntry(bs)
+		e, _, err := i.ParseEntry(bs)
 		if err != nil {
 			return err
 		}
 
-		i.StoreEntry(e, path)
+		i.StoreEntry(e)
 
 	}
 

@@ -80,17 +80,18 @@ func CreateTargetFromHead(path string, repo *Repository, s *Status) (*DiffTarget
 }
 
 func CreateTargetFromIndex(path string, repo *Repository, i *data.Index) (*DiffTarget, error) {
-	o, ok := i.Entries[path]
+	e, ok := i.EntryForPath(path)
+	// o, ok := i.Entries[path]
 
 	if !ok {
 		return nil, data.ErrorEntriesNotExists
 	}
 
-	e, ok := o.(*con.Entry)
+	// e, ok := o.(*con.Entry)
 
-	if !ok {
-		return nil, ErrorObjeToEntryConvError
-	}
+	// if !ok {
+	// 	return nil, ErrorObjeToEntryConvError
+	// }
 	d, err := CreateTargetFromEntry(path, repo, e)
 
 	if err != nil {

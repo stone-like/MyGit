@@ -99,7 +99,7 @@ func DetectWorkSpaceChanges(i *data.Index, s *Status, w *WorkSpace) error {
 			return ErrorObjeToEntryConvError
 		}
 
-		err := s.CheckIndexAgainstWorkSpace(k, e, i, w)
+		err := s.CheckIndexAgainstWorkSpace(k.Path, e, i, w)
 
 		if err != nil {
 			return err
@@ -325,13 +325,13 @@ func (s *Status) CheckIndexEntry(i *data.Index, w *WorkSpace) error {
 			return ErrorObjeToEntryConvError
 		}
 
-		err := s.CheckIndexAgainstWorkSpace(k, e, i, w)
+		err := s.CheckIndexAgainstWorkSpace(k.Path, e, i, w)
 
 		if err != nil {
 			return err
 		}
 
-		err = s.CheckIndexAgainstHeadTree(k, e)
+		err = s.CheckIndexAgainstHeadTree(k.Path, e)
 		if err != nil {
 			return err
 		}

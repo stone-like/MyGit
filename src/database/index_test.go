@@ -26,7 +26,7 @@ func Test_DiscardConflictFileToDir(t *testing.T) {
 	i.Add("alice.txt/nested.txt", "2b2b", nil, fn)
 
 	for ind, p := range []string{"bob.txt", "alice.txt/nested.txt"} {
-		assert.Equal(t, p, i.Keys[ind])
+		assert.Equal(t, p, i.Keys[ind].Path)
 	}
 }
 
@@ -46,7 +46,7 @@ func Test_DiscardConflictDirToFile(t *testing.T) {
 	i.Add("nested", "2b2b", nil, fn)
 
 	for ind, p := range []string{"alice.txt", "nested"} {
-		assert.Equal(t, p, i.Keys[ind])
+		assert.Equal(t, p, i.Keys[ind].Path)
 	}
 }
 
@@ -68,7 +68,7 @@ func Test_DiscardConflictDirToFile2(t *testing.T) {
 	i.Add("nested", "2b2b", nil, fn)
 
 	for ind, p := range []string{"alice.txt", "nested"} {
-		assert.Equal(t, p, i.Keys[ind])
+		assert.Equal(t, p, i.Keys[ind].Path)
 	}
 }
 
@@ -114,7 +114,9 @@ func Test_ReadFromFile(t *testing.T) {
 	}
 
 	for _, e := range []*con.Entry{h, x} {
-		if diff := cmp.Diff(e, i.Entries[e.Path]); diff != "" {
+
+		o, _ := i.Entries.GetValue(e.Path, e.GetStage())
+		if diff := cmp.Diff(e, o); diff != "" {
 			t.Errorf("diff is %s\n", diff)
 		}
 	}

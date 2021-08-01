@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"mygit/src/database/crypt"
 	"os"
 	"path/filepath"
@@ -178,12 +179,52 @@ func PaddingAlign8(str string) string {
 	return tempStr
 }
 
+var MAX_PATH_SIZE = 0xfff
+
+func MinPathSize(path string) int {
+	return int(math.Min(float64(len([]byte(path))), float64(MAX_PATH_SIZE)))
+}
+
+func CreateFlags(stage int, path string) int {
+	return (stage << 12) | MinPathSize(path)
+}
+
+func CreateEntryFromDB(stage int, path string, e *Entry) *Entry {
+	flags := CreateFlags(stage, path)
+	return &Entry{
+		Mode:  e.Mode,
+		ObjId: e.ObjId,
+		Flags: flags,
+		Path:  path,
+	}
+}
+
+func (e *Entry) GeModeForNormalAndNilEntry() int {
+	if e == nil {
+		return 0
+	} else {
+		return e.Mode
+	}
+}
+
+func (e *Entry) GetObjIdForNormalAndNilEntry() string {
+	if e == nil {
+		return ""
+	} else {
+		return e.ObjId
+	}
+}
+
 func (e *Entry) Type() string {
 	return ""
 }
 
 func (e *Entry) Basename() string {
 	return e.Path
+}
+
+func (e *Entry) GetStage() int {
+	return (e.Flags >> 12) & 0x3
 }
 
 //あとで共通化

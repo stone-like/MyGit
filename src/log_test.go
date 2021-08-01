@@ -491,7 +491,7 @@ func PrepareMergedFileTreeSame(t *testing.T) func() {
 	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
 	assert.NoError(t, err)
 
-	err = StartMerge(tempPath, "test", "test@email.com", "commit4", []string{"test1"})
+	err = StartMerge(tempPath, "test", "test@email.com", "commit4", []string{"test1"}, &buf)
 	assert.NoError(t, err)
 
 	return func() {

@@ -254,6 +254,13 @@ func (m *Migration) UntrackedParent(path string) (string, error) {
 			//親も存在しないなら
 			continue
 		}
+
+		//Dirの想定だがFileが来ることもある(例えばconflictの結果、HEADではccc.txtが存在し、cleanDiffでccc.txt/ddd.txtをチェックするときにdirとしてccc.txtをチェックするとき、
+		// この時cleandiff上ではccc.txtはDirだが、HEADのworkSpaceではccc.txtはFile
+		if !stat.IsDir() {
+			continue
+		}
+
 		lists, err := m.repo.w.ListDir(filepath.Join(m.repo.w.Path, d))
 		if err != nil {
 			return "", err

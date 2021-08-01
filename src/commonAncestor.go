@@ -4,6 +4,7 @@ import (
 	"errors"
 	data "mygit/src/database"
 	con "mygit/src/database/content"
+	dataUtil "mygit/src/database/util"
 	"mygit/util"
 	"reflect"
 )
@@ -253,4 +254,86 @@ func (cas *CommonAncestors) AddParents(c *con.CommitFromMem, childflags map[stri
 	}
 
 	return nil
+}
+
+type RedunduntCas struct {
+	redundant []string
+}
+
+func FilterCommit(commits []string, objId string, r *RedunduntCas, d *data.Database) error {
+	if dataUtil.Contains(r.redundant, objId) {
+		return nil
+	}
+
+	willRemove := append(r.redundant, objId)
+
+	others := dataUtil.RemovedSlice(commits, willRemove)
+
+	cas, err := GenerateCAS(objId, others, d)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = cas.FindCas()
+	if err != nil {
+		return err
+	}
+
+	if cas.IsMarked(objId, PARENT_TWO) {
+		r.redundant = append(r.redundant, objId)
+	}
+
+	for _, otherobjId := range others {
+		if cas.IsMarked(otherobjId, PARENT_ONE) {
+			r.redundant = append(r.redundant, otherobjId)
+		}
+	}
+
+	return nil
+
+}
+
+var ErrorBCANotFound = errors.New("BCA not Found")
+
+func GetBCA(headObjId, mergeObjId string, d *data.Database) (string, error) {
+	//BCAが一つもなかった時ってエラーでよさそうだけど...
+	commits, err := FindBCA(headObjId, mergeObjId, d)
+	if err != nil {
+		return "", err
+	}
+	if len(commits) == 0 {
+		return "", ErrorBCANotFound
+	}
+
+	return commits[0], nil
+}
+
+func FindBCA(headObjId, mergeObjId string, d *data.Database) ([]string, error) {
+	cas, err := GenerateCAS(headObjId, []string{mergeObjId}, d)
+	if err != nil {
+		return nil, err
+	}
+	commits, err := cas.FindCas()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(commits) <= 1 {
+		//commitsが1以下の時はBCAが見つかったか、一つもなかった時
+		return commits, nil
+	}
+
+	r := &RedunduntCas{}
+
+	//commitsが2以上ある場合
+	for _, objId := range commits {
+		err := FilterCommit(commits, objId, r, d)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return dataUtil.RemovedSlice(commits, r.redundant), nil
+
 }

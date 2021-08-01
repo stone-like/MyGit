@@ -120,10 +120,10 @@ func createParentDirs(path string) []string {
 
 }
 
-func ParentDirs(path string, nestedFirst bool) []string {
+func ParentDirs(path string, ascend bool) []string {
 	ret := createParentDirs(path)
 
-	if nestedFirst {
+	if ascend {
 		// xxx/yyy
 		// xxxの順番
 		sort.Slice(ret, func(i, j int) bool {

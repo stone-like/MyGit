@@ -41,7 +41,8 @@ to quickly create a Cobra application.`,
 		email := viper.GetString("email")
 
 		rootPath, _ := os.Getwd()
-		if err := src.StartMerge(rootPath, name, email, mergeMessage, args); err != nil {
+		w := os.Stdout
+		if err := src.StartMerge(rootPath, name, email, mergeMessage, args, w); err != nil {
 			return err
 		}
 

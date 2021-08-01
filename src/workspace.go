@@ -137,6 +137,25 @@ func pathMatch(s []string, e string) (bool, error) {
 	return false, nil
 }
 
+func (w *WorkSpace) WriteFile(path, content string) error {
+	f, err := os.Create(filepath.Join(w.Path, path))
+
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	if err != nil {
+		return err
+	}
+
+	f.Write([]byte(content))
+
+	return nil
+}
+
 //os.FileInfoを独自の構造体にwrapした方がよさそう
 func (w *WorkSpace) StatFile(path string) (con.FileState, error) {
 	absPath := filepath.Join(w.Path, path)
