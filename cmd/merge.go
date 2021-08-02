@@ -42,7 +42,8 @@ to quickly create a Cobra application.`,
 
 		rootPath, _ := os.Getwd()
 		w := os.Stdout
-		if err := src.StartMerge(rootPath, name, email, mergeMessage, args, w); err != nil {
+		mc := src.MergeCommand{RootPath: rootPath, Name: name, Email: email, Message: mergeMessage, Args: args}
+		if err := src.StartMerge(mc, w); err != nil {
 			return err
 		}
 

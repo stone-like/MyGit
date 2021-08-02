@@ -34,7 +34,7 @@ func PrepareCompareTwoCommit(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	os.Remove(dummyName)
@@ -43,7 +43,7 @@ func PrepareCompareTwoCommit(t *testing.T) string {
 	assert.NoError(t, err)
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	return tempPath //こうしているのはなぜかcleanUp関数を返そうとすると最後のコミットまでいかない
@@ -73,7 +73,7 @@ func PrepareCompareTwoCommitForMigartion(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	os.Remove(dummyName)
@@ -82,7 +82,7 @@ func PrepareCompareTwoCommitForMigartion(t *testing.T) string {
 	assert.NoError(t, err)
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	return tempPath //こうしているのはなぜかcleanUp関数を返そうとすると最後のコミットまでいかない
@@ -158,7 +158,7 @@ func TestUntrackedOverWritten(t *testing.T) {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	var buf1 bytes.Buffer
@@ -175,7 +175,7 @@ func TestUntrackedOverWritten(t *testing.T) {
 	CreateFiles(t, tempPath, "dup.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	var buf3 bytes.Buffer
@@ -218,7 +218,7 @@ func TestLocalChangeOverWritten(t *testing.T) {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	var buf1 bytes.Buffer
@@ -235,7 +235,7 @@ func TestLocalChangeOverWritten(t *testing.T) {
 	CreateFiles(t, tempPath, "dup.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	var buf3 bytes.Buffer
@@ -280,7 +280,7 @@ func TestUntrackedRemoved(t *testing.T) {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	var buf1 bytes.Buffer
@@ -296,7 +296,7 @@ func TestUntrackedRemoved(t *testing.T) {
 	addName := CreateFiles(t, tempPath, "added.txt", "a\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	os.Remove(addName)
@@ -340,7 +340,7 @@ func TestUpdatingFollowingDirectoriesLose(t *testing.T) {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	var buf1 bytes.Buffer
@@ -361,7 +361,7 @@ func TestUpdatingFollowingDirectoriesLose(t *testing.T) {
 	CreateFiles(t, xxxPath, "dup.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	var buf3 bytes.Buffer
@@ -416,7 +416,7 @@ func PrepareParentUntracked(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	f1, _ := os.OpenFile(filepath.Join(curDir, "tempDir/xxx/dummy.txt"), os.O_RDWR|os.O_CREATE, os.ModePerm)
@@ -426,7 +426,7 @@ func PrepareParentUntracked(t *testing.T) string {
 	assert.NoError(t, err)
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	return tempPath //こうしているのはなぜかcleanUp関数を返そうとすると最後のコミットまでいかない

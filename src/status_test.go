@@ -39,7 +39,7 @@ func Prepare(t *testing.T) func() {
 	ss := []string{rel1, rel2, rel3}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	return func() {

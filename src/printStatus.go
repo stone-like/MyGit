@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"mygit/src/database/util"
+	"reflect"
+
+	u "mygit/util"
 )
 
 const (
@@ -21,45 +24,145 @@ func (s *Status) WriteStatus(w io.Writer, isLong bool) error {
 	util.SortStringSlice(s.Untracked)
 
 	if isLong {
-		s.WriteLongStatus(w)
+		err := s.WriteLongStatus(w)
+		if err != nil {
+			return err
+		}
 	} else {
-		s.WritePorcelainStatus(w)
+		err := s.WritePorcelainStatus(w)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (s *Status) WritePorcelainStatus(w io.Writer) {
+func (s *Status) WritePorcelainStatus(w io.Writer) error {
 	for _, p := range s.Changed {
-		status := s.GenerateStatus(p)
+		//ConflictしているやつもChnagesに入っているので,GenerateStatusで処理してもらう
+
+		status, err := s.GenerateStatus(p)
+		if err != nil {
+			return err
+		}
 		w.Write([]byte(fmt.Sprintf("%s %s\n", status, p)))
 	}
 
 	for _, p := range s.Untracked {
 		w.Write([]byte(fmt.Sprintf("?? %s\n", p)))
 	}
+
+	return nil
 }
 
 var (
 	IndexChangeMessage     = "Changes to be Commited"        //commitとindexに違いが生じたとき
 	WorkSpaceChangeMessage = "Changes not staged for commit" //indexにあってworkspaceにある
 	UntrackFileMessage     = "Untracked files"               // indexになくてworkspaceにある
+	ConflictedMessage      = "Unmerged paths"                //現在のindexがconflict状態の時
 	LongAdded              = "new file:"
 	LongDeleted            = "deleted:"
 	LongModified           = "modified:"
 	LABELWIDTH             = 20
+	CONFLICT_LABELWIDTH    = 17
 	CommitStatusWorkSpace  = "no changes added to commit"
 	CommitStatusUntracked  = "nothing added to commit but untracked files present"
 	CommitStatusNothing    = "nothing to commit, working tree clean"
 )
 
-func (s *Status) WriteLongStatus(w io.Writer) {
+var ErrorInvalidLabelType = errors.New("Invalid LabelType")
 
-	s.GenerateChangesMessage(IndexChangeMessage, s.IndexChanges, w)
-	s.GenerateChangesMessage(WorkSpaceChangeMessage, s.WorkSpaceChanges, w)
-	s.GenerateChangesMessage(UntrackFileMessage, s.Untracked, w)
+var Normal = ":normal"
+var Conflict = ":conflict"
+
+var LongStatus = map[[3]int]string{
+	{INDEX_DELETE}:       LongDeleted,
+	{INDEX_MODIFIED}:     LongModified,
+	{INDEX_ADDED}:        LongAdded,
+	{WORKSPACE_MODIFIED}: LongModified,
+	{WORKSPACE_ADDED}:    LongAdded,
+}
+
+//sliceは比較不可なのでkeyにはできないがarrayならOK
+var ConflictLongStatus = map[[3]int]string{
+	{1, 2, 3}: "both modified:",
+	{1, 2}:    "deleted by them:",
+	{1, 3}:    "deleted by us:",
+	{2, 3}:    "both added:",
+	{2}:       "added by us:",
+	{3}:       "added by them:",
+}
+
+func GetConflictLongStatus(key []int) (string, error) {
+
+	var temp [3]int
+	copy(temp[:], key)
+
+	for intSet, str := range ConflictLongStatus {
+		if reflect.DeepEqual(intSet, temp) {
+			return str, nil
+		}
+	}
+
+	return "", ErrorInvalidLabelType
+}
+
+var ConflictShortStatus = map[[3]int]string{
+	{1, 2, 3}: "UU",
+	{1, 2}:    "UD",
+	{1, 3}:    "DU",
+	{2, 3}:    "AA",
+	{2}:       "AU",
+	{3}:       "UA",
+}
+
+func GetConflictShortStatus(key []int) (string, error) {
+
+	var temp [3]int
+	copy(temp[:], key)
+
+	for intSet, str := range ConflictShortStatus {
+		if reflect.DeepEqual(intSet, temp) {
+			return str, nil
+		}
+	}
+
+	return "", ErrorInvalidLabelType
+}
+
+var StatusMap = map[string]map[[3]int]string{
+	Normal:   LongStatus,
+	Conflict: ConflictLongStatus,
+}
+
+var WidthMap = map[string]int{
+	Normal:   LABELWIDTH,
+	Conflict: CONFLICT_LABELWIDTH,
+}
+
+func (s *Status) WriteLongStatus(w io.Writer) error {
+
+	err := s.GenerateChangesMessage(IndexChangeMessage, s.IndexChanges, w)
+	if err != nil {
+		return err
+	}
+	err = s.GenerateChangesMessage(ConflictedMessage, s.Conflicts, w)
+	if err != nil {
+		return err
+	}
+	err = s.GenerateChangesMessage(WorkSpaceChangeMessage, s.WorkSpaceChanges, w)
+	if err != nil {
+		return err
+	}
+	err = s.GenerateChangesMessage(UntrackFileMessage, s.Untracked, w)
+	if err != nil {
+		return err
+	}
 
 	s.PrintCommitStatus(w)
+
+	return nil
 }
 
 //PrinteCommitStatusは次にcommitしたときにどうなるかを表す、Commitの対象がある時(add .済み)の時は
@@ -83,16 +186,46 @@ func (s *Status) PrintCommitStatus(w io.Writer) {
 	}
 }
 
-func (s *Status) GenerateChangesMessage(message string, changeSet interface{}, w io.Writer) {
+//全部動作確認出来たら、[]string untrackedとかtypeにしてそこからGenerate~メソッドをはやす方向にリファクタリング
+func (s *Status) GenerateChangesMessage(message string, changeSet interface{}, w io.Writer) error {
 
 	switch v := changeSet.(type) {
 	case []string:
 		w.Write([]byte(GenerateChangesMessageForUntaracked(message, v)))
 	case map[string]int:
 		w.Write([]byte(GenerateChangesMessageForChangeSet(message, v)))
+	case map[string][]int:
+		content, err := GenerateChangesMessageForConflicts(message, v)
+		if err != nil {
+			return err
+		}
+		w.Write([]byte(content))
 	default:
 		break
 	}
+	return nil
+}
+
+func GenerateChangesMessageForConflicts(message string, changeSet map[string][]int) (string, error) {
+	if len(changeSet) == 0 {
+		return "", nil
+	}
+
+	var content string
+
+	content += message + ":\n"
+
+	for _, k := range u.SortedKeys(changeSet) {
+		status, err := GetConflictStatusString(changeSet[k])
+		if err != nil {
+			return "", err
+		}
+		content += fmt.Sprintf("\t%s%s", status, k)
+	}
+
+	content += "\n"
+
+	return content, nil
 }
 
 //色とかless対応はまたあとで
@@ -136,12 +269,18 @@ func GenerateChangesMessageForUntaracked(message string, untracked []string) str
 
 var ErrorInvalidChanges = errors.New("invalid Changes and Changed consistency")
 
-func (s *Status) GenerateStatus(path string) string {
+func (s *Status) GenerateStatus(path string) (string, error) {
+
+	ints, ok := s.Conflicts[path]
+
+	if ok {
+		return GetConflictShortStatus(ints)
+	}
 	//rangeであるやつだけここに来るので、mapの存在チェックはいらない
 	left := s.GetStatusFromChanges(INDEX, path)
 	right := s.GetStatusFromChanges(WORKSPACE, path)
 
-	return left + right
+	return left + right, nil
 }
 
 var (
@@ -165,6 +304,16 @@ func (s *Status) GetStatusFromChanges(setType string, path string) string {
 			return GetStatusString(change, false)
 		}
 	}
+}
+
+func GetConflictStatusString(status []int) (string, error) {
+
+	content, err := GetConflictLongStatus(status)
+	if err != nil {
+		return "", err
+	}
+	return PaddingSpace(content, CONFLICT_LABELWIDTH), nil
+
 }
 
 func GetStatusString(status int, isLong bool) string {

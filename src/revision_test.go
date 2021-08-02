@@ -129,7 +129,7 @@ func Test_ParseRev(t *testing.T) {
 // 	ss := []string{rel1, rel2}
 // 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 // 	assert.NoError(t, err)
-// 	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+// 	err = StartCommit(tempPath, "test", "test@example.com", "commit1",&buf)
 // 	assert.NoError(t, err)
 
 // 	CreateFiles(t, xxxPath, "dummy2.txt", "test2\n")
@@ -143,7 +143,7 @@ func Test_ParseRev(t *testing.T) {
 // 	ss = []string{"."}
 // 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 // 	assert.NoError(t, err)
-// 	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+// 	err = StartCommit(tempPath, "test", "test@example.com", "commit3",&buf)
 // 	assert.NoError(t, err)
 
 // 	// return func() {

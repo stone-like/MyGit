@@ -15,34 +15,37 @@ import (
 	"github.com/hexops/gotextdiff/span"
 )
 
-func StartDiff(w io.Writer, rootPath string, cached bool) error {
+type DiffOption struct {
+	Cached bool
+	Stage  int
+}
+
+func StartDiff(w io.Writer, rootPath string, option *DiffOption) error {
 	gitPath := filepath.Join(rootPath, ".git")
 	dbPath := filepath.Join(gitPath, "objects")
-
-	i := data.GenerateIndex(filepath.Join(gitPath, "index"))
-	err := i.Load()
-
-	if err != nil {
-		return err
-	}
-
 	repo := GenerateRepository(rootPath, gitPath, dbPath)
 
-	s := GenerateStatus()
-	err = s.IntitializeStatus(repo, i)
+	err := repo.i.Load()
+
 	if err != nil {
 		return err
 	}
 
-	if cached {
+	s := GenerateStatus()
+	err = s.IntitializeStatus(repo)
+	if err != nil {
+		return err
+	}
+
+	if option.Cached {
 		//Index<->CommitHead
-		err = DiffHeadIndex(i, s, repo, w)
+		err = DiffHeadIndex(s, repo, w)
 		if err != nil {
 			return err
 		}
 	} else {
 		//Index<->Workspace
-		err = DiffIndexWorkSpace(i, s, repo, w)
+		err = DiffIndexWorkSpace(option.Stage, s, repo, w)
 		if err != nil {
 			return err
 		}
@@ -79,19 +82,21 @@ func CreateTargetFromHead(path string, repo *Repository, s *Status) (*DiffTarget
 	return d, nil
 }
 
-func CreateTargetFromIndex(path string, repo *Repository, i *data.Index) (*DiffTarget, error) {
-	e, ok := i.EntryForPath(path)
-	// o, ok := i.Entries[path]
+func CreateTargetFromIndex(path string, repo *Repository) (*DiffTarget, error) {
+	return RunCreateTargetFromIndex(0, path, repo)
+}
+
+func CreateTargetFromIndexWithStage(stage int, path string, repo *Repository) (*DiffTarget, error) {
+	return RunCreateTargetFromIndex(stage, path, repo)
+}
+
+func RunCreateTargetFromIndex(stage int, path string, repo *Repository) (*DiffTarget, error) {
+	e, ok := repo.i.EntryForPathWithStage(path, stage)
 
 	if !ok {
 		return nil, data.ErrorEntriesNotExists
 	}
 
-	// e, ok := o.(*con.Entry)
-
-	// if !ok {
-	// 	return nil, ErrorObjeToEntryConvError
-	// }
 	d, err := CreateTargetFromEntry(path, repo, e)
 
 	if err != nil {
@@ -126,7 +131,7 @@ func CreateTargetFromEntry(path string, repo *Repository, e *con.Entry) (*DiffTa
 	}, nil
 }
 
-func CreateTargetFromFile(path string, repo *Repository, s *Status) (*DiffTarget, error) {
+func CreateTargetFromFile(path string, s *Status, repo *Repository) (*DiffTarget, error) {
 	content, err := repo.w.ReadFile(path)
 
 	if err != nil {
@@ -160,9 +165,37 @@ func CreateTargetFromNothing(path string) (*DiffTarget, error) {
 	}, nil
 }
 
-func DiffIndexWorkSpace(i *data.Index, s *Status, repo *Repository, w io.Writer) error {
+func PrintConflictDiff(stage int, path string, s *Status, repo *Repository, w io.Writer) error {
+	w.Write([]byte(fmt.Sprintf("* Unmerged path %s\n", path)))
+	target1, err := CreateTargetFromIndexWithStage(stage, path, repo)
+	if err != nil {
+		return err
+	}
 
-	for _, path := range util.SortedKeys(s.WorkSpaceChanges) {
+	target2, err := CreateTargetFromFile(path, s, repo)
+	if err != nil {
+		return err
+	}
+
+	return PrintDiff(target1, target2, repo, w)
+
+}
+
+func DiffIndexWorkSpace(stage int, s *Status, repo *Repository, w io.Writer) error {
+
+	var keys []string
+
+	keys = append(keys, util.SortedKeys(s.WorkSpaceChanges)...)
+	keys = append(keys, util.SortedKeys(s.Conflicts)...)
+
+	for _, path := range keys {
+
+		_, existsInConflict := s.Conflicts[path]
+		if existsInConflict {
+			PrintConflictDiff(stage, path, s, repo, w)
+			return nil
+		}
+
 		status, ok := s.WorkSpaceChanges[path]
 
 		if !ok {
@@ -172,11 +205,11 @@ func DiffIndexWorkSpace(i *data.Index, s *Status, repo *Repository, w io.Writer)
 		switch status {
 		case WORKSPACE_MODIFIED:
 			{
-				a, err := CreateTargetFromIndex(path, repo, i)
+				a, err := CreateTargetFromIndex(path, repo)
 				if err != nil {
 					return err
 				}
-				b, err := CreateTargetFromFile(path, repo, s)
+				b, err := CreateTargetFromFile(path, s, repo)
 				if err != nil {
 					return err
 				}
@@ -193,7 +226,7 @@ func DiffIndexWorkSpace(i *data.Index, s *Status, repo *Repository, w io.Writer)
 			}
 		case WORKSPACE_DELETE:
 			{
-				a, err := CreateTargetFromIndex(path, repo, i)
+				a, err := CreateTargetFromIndex(path, repo)
 				if err != nil {
 					return err
 				}
@@ -218,7 +251,7 @@ func DiffIndexWorkSpace(i *data.Index, s *Status, repo *Repository, w io.Writer)
 	return nil
 }
 
-func DiffHeadIndex(i *data.Index, s *Status, repo *Repository, w io.Writer) error {
+func DiffHeadIndex(s *Status, repo *Repository, w io.Writer) error {
 
 	for _, path := range util.SortedKeys(s.IndexChanges) {
 		status, ok := s.IndexChanges[path]
@@ -234,7 +267,7 @@ func DiffHeadIndex(i *data.Index, s *Status, repo *Repository, w io.Writer) erro
 				if err != nil {
 					return err
 				}
-				b, err := CreateTargetFromIndex(path, repo, i)
+				b, err := CreateTargetFromIndex(path, repo)
 				if err != nil {
 					return err
 				}
@@ -255,7 +288,7 @@ func DiffHeadIndex(i *data.Index, s *Status, repo *Repository, w io.Writer) erro
 				if err != nil {
 					return err
 				}
-				b, err := CreateTargetFromIndex(path, repo, i)
+				b, err := CreateTargetFromIndex(path, repo)
 				if err != nil {
 					return err
 				}

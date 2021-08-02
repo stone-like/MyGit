@@ -40,7 +40,9 @@ to quickly create a Cobra application.`,
 		email := viper.GetString("email")
 
 		rootPath, _ := os.Getwd()
-		if err := src.StartCommit(rootPath, name, email, message); err != nil {
+		w := os.Stdout
+
+		if err := src.StartCommit(rootPath, name, email, message, w); err != nil {
 			return err
 		}
 

@@ -35,7 +35,7 @@ func PrepareMerge(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -51,7 +51,7 @@ func PrepareMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -64,7 +64,7 @@ func PrepareMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -79,7 +79,8 @@ func Test_Merge(t *testing.T) {
 	var buf bytes.Buffer
 
 	//masterにtest1をmerge
-	err := StartMerge(tempPath, "test", "test@email.com", "merged", []string{"test1"}, &buf)
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+	err := StartMerge(mc, &buf)
 	assert.NoError(t, err)
 
 	c1, err := ioutil.ReadFile(filepath.Join(tempPath, "hello.txt"))
@@ -113,7 +114,7 @@ func PrepareNULLMerge(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -129,7 +130,7 @@ func PrepareNULLMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -142,10 +143,11 @@ func PrepareNULLMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
 	assert.NoError(t, err)
 
-	err = StartMerge(tempPath, "test", "test@email.com", "merged", []string{"test1"}, &buf)
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+	err = StartMerge(mc, &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -158,9 +160,10 @@ func TestNULLMerge(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
 
 	//masterにtest1をmerge
-	err := StartMerge(tempPath, "test", "test@email.com", "merged", []string{"test1"}, &buf)
+	err := StartMerge(mc, &buf)
 	assert.NoError(t, err)
 
 	assert.Equal(t, AlreadyMergedMessage, buf.String())
@@ -187,7 +190,7 @@ func PrepareFastForwardMerge(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commitA")
+	err = StartCommit(tempPath, "test", "test@example.com", "commitA", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -197,7 +200,7 @@ func PrepareFastForwardMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commitB")
+	err = StartCommit(tempPath, "test", "test@example.com", "commitB", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -214,7 +217,7 @@ func PrepareFastForwardMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commitC")
+	err = StartCommit(tempPath, "test", "test@example.com", "commitC", &buf)
 	assert.NoError(t, err)
 	//一回Createで開き直さないと追記になる
 	f3, err := os.Create(helloPath)
@@ -224,7 +227,7 @@ func PrepareFastForwardMerge(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commitD")
+	err = StartCommit(tempPath, "test", "test@example.com", "commitD", &buf)
 	assert.NoError(t, err)
 
 	err = StartCheckout(tempPath, []string{"master"}, &buf)
@@ -247,9 +250,10 @@ func TestFastForwardMerge(t *testing.T) {
 	assert.NoError(t, err)
 
 	var buf bytes.Buffer
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
 
 	//masterにtest1をmerge
-	err = RunMerge(tempPath, "test", "test@email.com", "merged", m, &buf)
+	err = RunMerge(mc, m, &buf)
 	assert.NoError(t, err)
 
 	//headがrightObjIdにupdateされていることを確認
@@ -291,7 +295,7 @@ func PrepareSamePathConflictContent(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -307,7 +311,7 @@ func PrepareSamePathConflictContent(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -320,7 +324,7 @@ func PrepareSamePathConflictContent(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -350,7 +354,9 @@ func Test_SamePathConflictContent(t *testing.T) {
 	m, err := GenerateMerge("HEAD", "test1", repo)
 	assert.NoError(t, err)
 
-	err = RunMerge(tempPath, "test", "test@email.com", "merged", m, &buf)
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err = RunMerge(mc, m, &buf)
 	assert.NoError(t, err)
 
 	//workspace更新を確認
@@ -409,7 +415,7 @@ func PrepareSamePathConflictMod(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -425,7 +431,7 @@ func PrepareSamePathConflictMod(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -438,7 +444,7 @@ func PrepareSamePathConflictMod(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -468,7 +474,9 @@ func Test_SamePathConflictMod(t *testing.T) {
 	m, err := GenerateMerge("HEAD", "test1", repo)
 	assert.NoError(t, err)
 
-	err = RunMerge(tempPath, "test", "test@email.com", "merged", m, &buf)
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err = RunMerge(mc, m, &buf)
 	assert.NoError(t, err)
 
 	//workspace更新を確認
@@ -500,8 +508,6 @@ func Test_SamePathConflictMod(t *testing.T) {
 
 }
 
-//明日はFileDirのtest書くところから
-
 //FileDirをテストしてテスト項目は
 //commitまで行われていない->refs/heads/masterのObjIdが変わっていない
 //index,workspaceがそれぞれ変更されていること
@@ -528,7 +534,7 @@ func PrepareFileDirConflict(t *testing.T) string {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -546,7 +552,7 @@ func PrepareFileDirConflict(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -562,7 +568,7 @@ func PrepareFileDirConflict(t *testing.T) string {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -599,7 +605,9 @@ func Test_FileDirConflict(t *testing.T) {
 	m, err := GenerateMerge("HEAD", "test1", repo)
 	assert.NoError(t, err)
 
-	err = RunMerge(tempPath, "test", "test@email.com", "merged", m, &buf)
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err = RunMerge(mc, m, &buf)
 	assert.NoError(t, err)
 
 	//workspace更新を確認
@@ -647,5 +655,303 @@ func Test_FileDirConflict(t *testing.T) {
 	afterMergedObjId, err := ResolveRev(ret, repo)
 	assert.NoError(t, err)
 	assert.Equal(t, beforeMergedObjId, afterMergedObjId)
+
+}
+
+func PrepareBeforeConflictMerge(t *testing.T) string {
+
+	// A -> B  master
+	//   \
+	//     C   test1
+
+	cur, err := os.Getwd()
+	assert.NoError(t, err)
+	tempPath, err := ioutil.TempDir(cur, "")
+	assert.NoError(t, err)
+
+	helloPath := CreateFiles(t, tempPath, "hello.txt", "initial\n")
+
+	is := []string{tempPath}
+
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
+	assert.NoError(t, err)
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	err = StartBranch(tempPath, []string{"test1"}, &BranchOption{}, &buf)
+	assert.NoError(t, err)
+
+	err = StartCheckout(tempPath, []string{"test1"}, &buf)
+	assert.NoError(t, err)
+
+	f1, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f1.Write([]byte("test1Changed\n"))
+	f1.Close()
+
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	err = StartCheckout(tempPath, []string{"master"}, &buf)
+	assert.NoError(t, err)
+
+	f2, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f2.Write([]byte("masterChanged\n"))
+	f2.Close()
+
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
+	assert.NoError(t, err)
+
+	return tempPath
+}
+
+// testはMergeMsgができているかと、
+// merge終了したときにしっかりno mergeConflictがでるか
+// と
+// それぞれマージのメッセージがしっかり出るか
+func TestCreateMergeHeadAndMessage(t *testing.T) {
+	tempPath := PrepareBeforeConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	var buf bytes.Buffer
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err := StartMerge(mc, &buf)
+	assert.NoError(t, err)
+	gitPath := filepath.Join(tempPath, ".git")
+
+	stat, _ := os.Stat(filepath.Join(gitPath, Merge_HEAD))
+	assert.NotNil(t, stat)
+	stat, _ = os.Stat(filepath.Join(gitPath, Merge_MSG))
+	assert.NotNil(t, stat)
+
+	str := buf.String()
+
+	if diff := cmp.Diff(`Auto-merging hello.txt
+CONFLICT (content): Merge conflict in hello.txt
+Automatic merge failed: fix conflicts and then commit the result.
+`, str); diff != "" {
+		t.Errorf("diff is %s\n", diff)
+	}
+
+}
+
+func TestAlreadyMergedMessageInProgress(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときに、マージとコミットをしたときのメッセージ
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	var buf bytes.Buffer
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err := StartMerge(mc, &buf)
+	assert.NoError(t, err)
+
+	str := buf.String()
+
+	if diff := cmp.Diff(`error: Merging is not possible because youy unmerged files
+hint: Fix them up in the work tree, and then use 'mygit add/rm <file>'
+hint: as appropriate to mark resolution and make a commit.
+fatal: Exiting because of an unresolved conflict.
+`, str); diff != "" {
+		t.Errorf("diff is %s\n", diff)
+	}
+
+}
+
+func TestCommitWithoutAddingIndex(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときに、マージとコミットをしたときのメッセージ
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	expect := `error: Commiting is not possible because you have unmerged files/nhint: Fix them up in the work tree, and then use 'mygit add/rm <file>'
+hint: as appropriate to mark resolution and make a commit.
+fatal: Exiting because of an unresolved conflict.
+`
+
+	for _, d := range []struct {
+		title string
+		fn    func() string
+	}{
+		{"mergeCommit --continue", func() string {
+			var buf bytes.Buffer
+
+			mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"},
+				Option: MergeOption{hasContinue: true},
+			}
+
+			err := StartMerge(mc, &buf)
+			assert.NoError(t, err)
+
+			return buf.String()
+		}},
+		{"commit", func() string {
+			var buf bytes.Buffer
+			err := StartCommit(tempPath, "test", "test@email.com", "test", &buf)
+			assert.NoError(t, err)
+			return buf.String()
+		}},
+	} {
+		t.Run(d.title, func(t *testing.T) {
+			if diff := cmp.Diff(expect, d.fn()); diff != "" {
+				t.Errorf("diff is %s\n", diff)
+			}
+		})
+	}
+
+}
+
+func TestMergeContinueWithAddingIndex(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときに、マージとコミットをしたときのメッセージ
+
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+
+	ret, err := ParseRev("@")
+	assert.NoError(t, err)
+	beforeMergedObjId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+
+	var buf bytes.Buffer
+
+	helloPath := filepath.Join(tempPath, "hello.txt")
+
+	f1, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f1.Write([]byte("conflictFixed\n"))
+	defer f1.Close()
+
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"},
+		Option: MergeOption{hasContinue: true},
+	}
+
+	err = StartMerge(mc, &buf)
+	assert.NoError(t, err)
+
+	stat, _ := os.Stat(filepath.Join(gitPath, Merge_HEAD))
+	assert.Nil(t, stat)
+	stat, _ = os.Stat(filepath.Join(gitPath, Merge_MSG))
+	assert.Nil(t, stat)
+
+	ret, err = ParseRev("@")
+	assert.NoError(t, err)
+	afterMergedObjId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+	assert.NotEqual(t, beforeMergedObjId, afterMergedObjId)
+
+}
+
+func TestCommitWithAddingIndex(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときに、マージとコミットをしたときのメッセージ
+
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+
+	ret, err := ParseRev("@")
+	assert.NoError(t, err)
+	beforeMergedObjId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+
+	var buf bytes.Buffer
+
+	helloPath := filepath.Join(tempPath, "hello.txt")
+
+	f1, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f1.Write([]byte("conflictFixed\n"))
+	defer f1.Close()
+
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+
+	err = StartCommit(tempPath, "test", "test@email.com", "test", &buf)
+	assert.NoError(t, err)
+
+	stat, _ := os.Stat(filepath.Join(gitPath, Merge_HEAD))
+	assert.Nil(t, stat)
+	stat, _ = os.Stat(filepath.Join(gitPath, Merge_MSG))
+	assert.Nil(t, stat)
+
+	ret, err = ParseRev("@")
+	assert.NoError(t, err)
+	afterMergedObjId, err := ResolveRev(ret, repo)
+	assert.NoError(t, err)
+	assert.NotEqual(t, beforeMergedObjId, afterMergedObjId)
+
+}
+
+func TestNoMergeMessageAfterCommitWithAddingIndex(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときに、マージとコミットをしたときのメッセージ
+
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	var buf bytes.Buffer
+
+	helloPath := filepath.Join(tempPath, "hello.txt")
+
+	f1, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f1.Write([]byte("conflictFixed\n"))
+	defer f1.Close()
+
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+
+	err = StartCommit(tempPath, "test", "test@email.com", "test", &buf)
+	assert.NoError(t, err)
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"},
+		Option: MergeOption{hasContinue: true},
+	}
+
+	var newBuf bytes.Buffer
+
+	StartMerge(mc, &newBuf)
+
+	str := newBuf.String()
+
+	if diff := cmp.Diff("There is no merge in progress (Merge_HEAD missng).\n", str); diff != "" {
+		t.Errorf("diff is %s\n", diff)
+	}
 
 }

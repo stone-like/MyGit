@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -94,7 +95,7 @@ func TestDiffStatusModContent_Index_And_WorkSpace(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, false)
+	err = StartDiff(buf, tempPath, &DiffOption{})
 	assert.NoError(t, err)
 
 	expected := fmt.Sprintf("diff --git a/hello.txt b/hello.txt\nindex %s..%s 100644\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-test\n+change1\n", ShortOid(beforeBlob, repo.d), ShortOid(afterBlob, repo.d))
@@ -114,7 +115,7 @@ func TestDiffStatusModMode_Index_And_WorkSpace(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, false)
+	err = StartDiff(buf, tempPath, &DiffOption{})
 	assert.NoError(t, err)
 
 	expected := "diff --git a/hello.txt b/hello.txt\nold mode 100644\nnew mode 100755\n"
@@ -142,7 +143,7 @@ func TestDiffStatusModModeAndContent_Index_And_WorkSpace(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, false)
+	err = StartDiff(buf, tempPath, &DiffOption{})
 	assert.NoError(t, err)
 
 	expected := fmt.Sprintf("diff --git a/hello.txt b/hello.txt\nold mode 100644\nnew mode 100755\nindex %s..%s\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-test\n+change1\n", ShortOid(beforeBlob, repo.d), ShortOid(afterBlob, repo.d))
@@ -165,7 +166,7 @@ func TestDiffStatusDeleted_Index_And_WorkSpace(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, false)
+	err = StartDiff(buf, tempPath, &DiffOption{})
 	assert.NoError(t, err)
 
 	expected := fmt.Sprintf("diff --git a/hello.txt b/hello.txt\ndeleted file mode 100644\nindex %s..000000\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-test\n", ShortOid(beforeBlob, repo.d))
@@ -193,7 +194,7 @@ func TestDiffStatusModModeAndContent_Index_And_Commit(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, true)
+	err = StartDiff(buf, tempPath, &DiffOption{Cached: true})
 	assert.NoError(t, err)
 
 	str := buf.String()
@@ -239,7 +240,7 @@ func TestDiffStatusDeleted_Index_And_Commit(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, true)
+	err = StartDiff(buf, tempPath, &DiffOption{Cached: true})
 	assert.NoError(t, err)
 
 	str := buf.String()
@@ -270,7 +271,7 @@ func TestDiffStatusAdded_Index_And_Commit(t *testing.T) {
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
-	err = StartDiff(buf, tempPath, true)
+	err = StartDiff(buf, tempPath, &DiffOption{Cached: true})
 	assert.NoError(t, err)
 
 	str := buf.String()
@@ -286,4 +287,170 @@ index 000000..d5f7fc
 	if diff := cmp.Diff(expected, str); diff != "" {
 		t.Errorf("diff is %s\n", diff)
 	}
+}
+
+func PrepareConflictMerge(t *testing.T) string {
+
+	// A -> B -> D master
+	//   \    /
+	//     C   test1
+
+	cur, err := os.Getwd()
+	assert.NoError(t, err)
+	tempPath, err := ioutil.TempDir(cur, "")
+	assert.NoError(t, err)
+
+	helloPath := CreateFiles(t, tempPath, "hello.txt", "initial\n")
+
+	is := []string{tempPath}
+
+	var buf bytes.Buffer
+	err = StartInit(is, &buf)
+	assert.NoError(t, err)
+	ss := []string{"."}
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	err = StartBranch(tempPath, []string{"test1"}, &BranchOption{}, &buf)
+	assert.NoError(t, err)
+
+	err = StartCheckout(tempPath, []string{"test1"}, &buf)
+	assert.NoError(t, err)
+
+	f1, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f1.Write([]byte("test1Changed\n"))
+	f1.Close()
+
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
+
+	err = StartCheckout(tempPath, []string{"master"}, &buf)
+	assert.NoError(t, err)
+
+	f2, err := os.Create(helloPath)
+	assert.NoError(t, err)
+	f2.Write([]byte("masterChanged\n"))
+	f2.Close()
+
+	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
+	assert.NoError(t, err)
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
+	assert.NoError(t, err)
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err = StartMerge(mc, &buf)
+	assert.NoError(t, err)
+
+	return tempPath
+}
+
+//TODO conflictのときdiff --gitではなく--ccとなったり、stage未選択でのconflictDiff表示は現在未実装
+//本家はoursとtheirsでも、元ファイルの-test1Changedとかも表示されるのでやっぱりdiffは自作しなくてはいけなさそう
+func TestDiffStatusConflicted(t *testing.T) {
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+
+	initialObjId, err := CreateObjIdFromContent("initial\n")
+	assert.NoError(t, err)
+	test1ObjId, err := CreateObjIdFromContent("test1Changed\n")
+	assert.NoError(t, err)
+	masterObjId, err := CreateObjIdFromContent("masterChanged\n")
+	assert.NoError(t, err)
+
+	content, err := ioutil.ReadFile(filepath.Join(tempPath, "hello.txt"))
+	assert.NoError(t, err)
+	curWorkSpaceObjId, err := CreateObjIdFromContent(string(content))
+	assert.NoError(t, err)
+
+	for _, d := range []struct {
+		title       string
+		targetStage int
+		expected    string
+	}{
+		{
+			"base",
+			1,
+			fmt.Sprintf(
+				`* Unmerged path hello.txt
+diff --git a/hello.txt b/hello.txt
+index %s..%s 100644
+--- a/hello.txt
++++ b/hello.txt
+@@ -1 +1,7 @@
+-initial
++<<<<<<< HEAD
++masterChanged
++
++=======
++test1Changed
++
++>>>>>>> test1
+`, repo.d.ShortObjId(initialObjId), repo.d.ShortObjId(curWorkSpaceObjId)),
+		},
+		{
+			"ours",
+			2,
+			fmt.Sprintf(
+				`* Unmerged path hello.txt
+diff --git a/hello.txt b/hello.txt
+index %s..%s 100644
+--- a/hello.txt
++++ b/hello.txt
+@@ -1 +1,7 @@
++<<<<<<< HEAD
+ masterChanged
++
++=======
++test1Changed
++
++>>>>>>> test1
+`, repo.d.ShortObjId(masterObjId), repo.d.ShortObjId(curWorkSpaceObjId)),
+		},
+		{
+			"theirs",
+			3,
+			fmt.Sprintf(
+				`* Unmerged path hello.txt
+diff --git a/hello.txt b/hello.txt
+index %s..%s 100644
+--- a/hello.txt
++++ b/hello.txt
+@@ -1 +1,7 @@
++<<<<<<< HEAD
++masterChanged
++
++=======
+ test1Changed
++
++>>>>>>> test1
+`, repo.d.ShortObjId(test1ObjId), repo.d.ShortObjId(curWorkSpaceObjId)),
+		},
+	} {
+		t.Run(d.title, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			err := StartDiff(buf, tempPath, &DiffOption{Stage: d.targetStage})
+			assert.NoError(t, err)
+
+			str := buf.String()
+
+			if diff := cmp.Diff(d.expected, str); diff != "" {
+				t.Errorf("diff is %s\n", diff)
+			}
+		})
+	}
+
 }

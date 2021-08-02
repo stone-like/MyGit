@@ -196,6 +196,10 @@ func (i *Index) DiscardConflicts(e *con.Entry) error {
 }
 
 func (i *Index) Add(path, objId string, stat con.FileState, createIndexEntry CreateFn) error {
+	//addの際は与えられたpathのstage1~3の奴を消し、stage0を追加
+	for _, num := range []int{1, 2, 3} {
+		i.RemoveEntryWithStage(path, num)
+	}
 
 	e := i.CreateIndexEntry(path, objId, stat, createIndexEntry)
 	err := i.DiscardConflicts(e)

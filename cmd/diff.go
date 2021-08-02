@@ -23,6 +23,25 @@ import (
 )
 
 var cached bool
+var base string
+var theirs string
+var ours string
+
+func GetStage() int {
+	if base != "" {
+		return 1
+	}
+
+	if theirs != "" {
+		return 2
+	}
+
+	if ours != "" {
+		return 3
+	}
+
+	return 0
+}
 
 // diffCmd represents the diff command
 var diffCmd = &cobra.Command{
@@ -33,8 +52,13 @@ var diffCmd = &cobra.Command{
 
 		rootPath, _ := os.Getwd()
 
+		o := &src.DiffOption{
+			Cached: cached,
+			Stage:  GetStage(),
+		}
+
 		w := os.Stdout
-		if err := src.StartDiff(w, rootPath, cached); err != nil {
+		if err := src.StartDiff(w, rootPath, o); err != nil {
 			return err
 		}
 
@@ -44,5 +68,8 @@ var diffCmd = &cobra.Command{
 
 func init() {
 	diffCmd.Flags().BoolVarP(&cached, "cached", "c", true, "display index<->commit diff")
+	diffCmd.Flags().StringVarP(&base, "base", "b", "", "diff base")
+	diffCmd.Flags().StringVarP(&theirs, "theirs", "t", "", "diff theirs")
+	diffCmd.Flags().StringVarP(&ours, "ours", "o", "", "diff ours")
 	rootCmd.AddCommand(diffCmd)
 }

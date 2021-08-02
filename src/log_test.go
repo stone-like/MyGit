@@ -37,14 +37,14 @@ func PrepareMultipleBranch(t *testing.T) func() {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
 	CreateFiles(t, tempPath, "hello2.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit2")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit2", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -57,7 +57,7 @@ func PrepareMultipleBranch(t *testing.T) func() {
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -67,7 +67,7 @@ func PrepareMultipleBranch(t *testing.T) func() {
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit4")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit4", &buf)
 	assert.NoError(t, err)
 
 	return func() {
@@ -179,14 +179,14 @@ func PrepareUninteresting(t *testing.T) func() {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
 	CreateFiles(t, tempPath, "hello2.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit2")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit2", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -199,21 +199,21 @@ func PrepareUninteresting(t *testing.T) func() {
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 	CreateFiles(t, tempPath, "hello4.txt", "test\n")
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit4")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit4", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 	CreateFiles(t, tempPath, "hello5.txt", "test\n")
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit5")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit5", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -223,13 +223,13 @@ func PrepareUninteresting(t *testing.T) func() {
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit6")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit6", &buf)
 	assert.NoError(t, err)
 	CreateFiles(t, tempPath, "hello7.txt", "test\n")
 	ss = []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit7")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit7", &buf)
 	assert.NoError(t, err)
 
 	return func() {
@@ -314,7 +314,7 @@ func Test_LogUninterested(t *testing.T) {
 // 	ss := []string{"."}
 // 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 // 	assert.NoError(t, err)
-// 	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+// 	err = StartCommit(tempPath, "test", "test@example.com", "commit1",&buf)
 // 	assert.NoError(t, err)
 // 	time.Sleep(1 * time.Second)
 
@@ -459,7 +459,7 @@ func PrepareMergedFileTreeSame(t *testing.T) func() {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit1")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit1", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -475,7 +475,7 @@ func PrepareMergedFileTreeSame(t *testing.T) func() {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit2")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit2", &buf)
 	assert.NoError(t, err)
 	time.Sleep(1 * time.Second)
 
@@ -488,10 +488,12 @@ func PrepareMergedFileTreeSame(t *testing.T) func() {
 
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "commit3")
+	err = StartCommit(tempPath, "test", "test@example.com", "commit3", &buf)
 	assert.NoError(t, err)
 
-	err = StartMerge(tempPath, "test", "test@email.com", "commit4", []string{"test1"}, &buf)
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
+
+	err = StartMerge(mc, &buf)
 	assert.NoError(t, err)
 
 	return func() {

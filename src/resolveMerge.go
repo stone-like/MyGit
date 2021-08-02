@@ -1,7 +1,9 @@
 package src
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	con "mygit/src/database/content"
 	"mygit/src/database/util"
 	"reflect"
@@ -15,18 +17,20 @@ type ResolveMerge struct {
 	//untrackedはfileDirConflictの時用、このconflictした結果はindexではなくworkspaceに反映,fileはrenameされる
 	untracked map[string]*con.Entry
 	m         *Merge
+	writer    io.Writer
 }
 
 //整理しておかないといけないのは、EntryはあくまでindexにObjId等を保存する媒体なだけで、
 //GitObjectはBlob,Tree,Commit
 //なのでIndexをロード->EntryからObjIdを取り出してBlobを取得したりすることもある
 //interface ObjectでBlobもEntryも同様に扱えてしまえているのがよくないかも、Entryは切り離した方がよさそう
-func GenerateResolveMerge(m *Merge) *ResolveMerge {
+func GenerateResolveMerge(m *Merge, w io.Writer) *ResolveMerge {
 	return &ResolveMerge{
 		cleanDiff: make(map[string][]*con.Entry),
 		conflicts: make(map[string][]*con.Entry),
 		untracked: make(map[string]*con.Entry),
 		m:         m,
+		writer:    w,
 	}
 }
 
@@ -138,6 +142,111 @@ func (rm *ResolveMerge) PrepareTreeDiff() error {
 
 }
 
+var ErrorNotCorrectPathForConflicts = errors.New("NotCorrectPathForConflicts")
+var ErrorNotCorrectLenForConflicts = errors.New("NotCorrectLenForConflicts")
+var CorrentLenForConflicts = 3
+
+func CheckLeftAndRightExists(left, right *con.Entry) bool {
+	return left != nil && right != nil
+}
+
+func CheckBaseAndAtLeastOneExists(base, left, right *con.Entry) bool {
+	if base == nil {
+		return false
+	}
+
+	return left != nil || right != nil
+}
+
+func (rm *ResolveMerge) LogConflictWithRename(path, rename string) error {
+	return rm.RunLogConflict(path, rename)
+}
+
+func (rm *ResolveMerge) LogConflict(path string) error {
+	return rm.RunLogConflict(path, "")
+}
+
+//LogConflictはConflictsに値を入れたときに呼ぶ
+func (rm *ResolveMerge) RunLogConflict(path, rename string) error {
+	entries, ok := rm.conflicts[path]
+
+	if !ok {
+		return ErrorNotCorrectPathForConflicts
+	}
+
+	if len(entries) != CorrentLenForConflicts {
+		return ErrorNotCorrectLenForConflicts
+	}
+
+	base := entries[0]
+	left := entries[1]
+	right := entries[2]
+
+	if CheckLeftAndRightExists(left, right) {
+		rm.LogLeftRightConflict(path, base)
+	} else if CheckBaseAndAtLeastOneExists(base, left, right) {
+		rm.LogModifyDeleteConflict(path, rename, left)
+	} else {
+		//left,rightが片方しかない＋baseがない or
+		//left,rightが両方ないだが、両方ない場合はdeleted/deletedでconflictではない
+		rm.LogFileDirConflict(path, rename, left)
+
+	}
+
+	return nil
+}
+
+func (rm *ResolveMerge) LogLeftRightConflict(path string, base *con.Entry) {
+	var conflictType string
+	if base == nil {
+		conflictType = "add/add"
+	} else {
+		conflictType = "content"
+	}
+
+	rm.writer.Write([]byte(fmt.Sprintf("CONFLICT (%s): Merge conflict in %s\n", conflictType, path)))
+}
+
+func (rm *ResolveMerge) LogModifyDeleteConflict(path, rename string, left *con.Entry) {
+	modifiedName, deletedName := rm.LogBranchNames(left)
+
+	var renameMessage string
+	if rename != "" {
+		renameMessage = fmt.Sprintf(" at %s", rename)
+	}
+
+	rm.writer.Write([]byte(fmt.Sprintf("CONFLICT (modify/delete): %s deleted in %s and modified in %s.\n", path, deletedName, modifiedName)))
+	rm.writer.Write([]byte(fmt.Sprintf("Version %s of %s left in tree%s\n", modifiedName, path, renameMessage)))
+}
+
+func (rm *ResolveMerge) LogBranchNames(left *con.Entry) (modfiedName string, deletedName string) {
+	if left == nil {
+		//leftがnilならdeleteがleftでmodifiedがright
+		modfiedName = rm.m.rightName
+		deletedName = rm.m.leftName
+	} else {
+		modfiedName = rm.m.leftName
+		deletedName = rm.m.rightName
+	}
+
+	return
+}
+
+func (rm *ResolveMerge) LogFileDirConflict(path, rename string, left *con.Entry) {
+	var conflictType string
+	if left == nil {
+		//下記のFileDirConflictを参照すると、left==nilのときはrightがDirのConflict
+		conflictType = "file/directory"
+	} else {
+		conflictType = "directory/file"
+	}
+
+	modifiedName, _ := rm.LogBranchNames(left)
+
+	rm.writer.Write([]byte(fmt.Sprintf("Conflict (%s): There is a directory with name %s in %s.\n", conflictType, path, modifiedName)))
+	rm.writer.Write([]byte(fmt.Sprintf("Adding %s as %s\n", path, rename)))
+}
+
 func (rm *ResolveMerge) FileDirConflict(path, name string, diff *TreeDiff) {
 	for _, p := range util.ParentDirs(path, true) {
 		entries, ok := diff.Changes[p]
@@ -174,6 +283,13 @@ func (rm *ResolveMerge) FileDirConflict(path, name string, diff *TreeDiff) {
 
 		rm.untracked[renamed] = entries[1]
 
+		if _, ok := diff.Changes[path]; !ok {
+			//diffに存在しない物を追加する時
+			rm.writer.Write([]byte(fmt.Sprintf("Adding %s\n", path)))
+		}
+		//logConflict
+		rm.LogConflictWithRename(path, renamed)
+
 	}
 }
 
@@ -196,6 +312,11 @@ func (rm *ResolveMerge) SamePathConflict(path string, baseEntry, rightEntry *con
 	}
 
 	leftDiffEntry := leftEntries[1] //diffのchangesのEntriesの[0]が変更前、[1]がdiff後
+
+	//両方存在するときに書き込む理由はどっちかnilならfastforwaedかnullmergeになるからだと思われる
+	if leftDiffEntry != nil && rightEntry != nil {
+		rm.writer.Write([]byte(fmt.Sprintf("Auto-merging %s\n", path)))
+	}
 
 	//leftとrightの変更後を比べて同じだったらなにもしない
 	//ポインタ同士の比較だとメモリアドレスが同じでなければ同じでないので、
@@ -233,6 +354,8 @@ func (rm *ResolveMerge) SamePathConflict(path string, baseEntry, rightEntry *con
 		}
 
 		rm.conflicts[path] = append(rm.conflicts[path], []*con.Entry{baseEntry, leftDiffEntry, rightEntry}...)
+		//logConflict
+		rm.LogConflict(path)
 	}
 
 }

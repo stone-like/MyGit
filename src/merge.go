@@ -50,7 +50,7 @@ func GenerateMerge(leftName, rightName string, repo *Repository) (*Merge, error)
 		baseObjId:  baseObjId}, nil
 }
 
-func (m *Merge) ResolveMerge() error {
+func (m *Merge) ResolveMerge(w io.Writer) error {
 	l := lock.NewFileLock(m.repo.i.Path)
 	l.Lock()
 	defer l.Unlock()
@@ -60,7 +60,7 @@ func (m *Merge) ResolveMerge() error {
 		return err
 	}
 
-	resolveMerge := GenerateResolveMerge(m)
+	resolveMerge := GenerateResolveMerge(m, w)
 	err = resolveMerge.Resolve()
 	if err != nil {
 		return err
@@ -139,8 +139,64 @@ func (m *Merge) HandleFastForward(w io.Writer) error {
 }
 
 var AlreadyMergedMessage = "Already up to date\n"
+var MergeFaildMessage = "Automatic merge failed: fix conflicts and then commit the result.\n"
 
-func RunMerge(rootPath, name, email, mergeMessage string, m *Merge, w io.Writer) error {
+func HandleContinue(pc *PendingCommit, mc MergeCommand, repo *Repository, w io.Writer) error {
+	//conflict後マージを再開するとき
+	err := repo.i.Load()
+	if err != nil {
+		return err
+	}
+
+	//ResumeMergeのThere is no merge~はmerge continueでしか行われない、なぜなら、
+	//commitのResumeMergeはinProgressの時にしか起きない->conflict解消前の時のみ、解消前ではno mergeとはならない
+	//merge --continueの時はフラグを立てればconflict解消後でもresumeMergeは起動する
+	err = ResumeMerge(
+		mc.Name,
+		mc.Email,
+		pc,
+		repo,
+		w,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+var INPROGRESS_MESSAGE = "Merging is not possible because youy unmerged files"
+
+func HandleInProgressMerge(w io.Writer) {
+	w.Write([]byte(fmt.Sprintf("error: %s\n", INPROGRESS_MESSAGE)))
+	w.Write([]byte(CONFLICT_MESSAGE))
+	w.Write([]byte("\n"))
+
+}
+
+func RunMerge(mc MergeCommand, m *Merge, w io.Writer) error {
+
+	//3-wayMerge開始時にcommit中断用のファイルを作る
+	pc := GeneratePendingCommit(filepath.Join(mc.RootPath, ".git"))
+	//conflictでcommit出来なかったやつをここでcommitしてMergeHeadを消す,--continueの時はここで終わり
+	//conflictのあとはadd . -> merge --c or commitで解消する、merge --cのときはこっち
+	if mc.Option.hasContinue {
+		return HandleContinue(pc, mc, m.repo, w)
+	}
+
+	//まだconflict中だったら
+	//Startより先にInProgressを判断しないと、StartでMergeHeadを作るので常にInProgressになるので、
+	//InProgressを先に持ってくる
+	if pc.InProgress() {
+		HandleInProgressMerge(w)
+		return nil
+	}
+
+	err := pc.Start(m.rightObjId, mc.Message)
+	if err != nil {
+		return err
+	}
 	//Null Merge
 	if m.AlreadyMerged() {
 		w.Write([]byte(AlreadyMergedMessage))
@@ -152,7 +208,7 @@ func RunMerge(rootPath, name, email, mergeMessage string, m *Merge, w io.Writer)
 		return err
 	}
 
-	err := m.ResolveMerge()
+	err = m.ResolveMerge(w)
 	if err != nil {
 		return err
 	}
@@ -161,11 +217,17 @@ func RunMerge(rootPath, name, email, mergeMessage string, m *Merge, w io.Writer)
 	//migartionのときにdetectするのは現在のworkspace<->index,index<->commit間
 	//対してmergeのconflictDetectionは異なるcommit間なのでDetectionの範囲が違う
 	if m.repo.i.IsConflicted() {
-		//ここでMERGE＿HEADを後々作る
+		w.Write([]byte(MergeFaildMessage))
 		return nil
 	}
 
-	err = m.CommitMerge(name, email, mergeMessage)
+	err = m.CommitMerge(mc.Name, mc.Email, mc.Message)
+	if err != nil {
+		return err
+	}
+
+	//Commitが正常に終了した場合はMerge_HEAD等を削除する
+	err = pc.Clear()
 	if err != nil {
 		return err
 	}
@@ -173,17 +235,30 @@ func RunMerge(rootPath, name, email, mergeMessage string, m *Merge, w io.Writer)
 	return nil
 }
 
-func StartMerge(rootPath, name, email, mergeMessage string, args []string, w io.Writer) error {
+type MergeOption struct {
+	hasContinue bool
+}
 
-	gitPath := filepath.Join(rootPath, ".git")
+type MergeCommand struct {
+	RootPath string
+	Name     string
+	Email    string
+	Message  string
+	Args     []string
+	Option   MergeOption
+}
+
+func StartMerge(mc MergeCommand, w io.Writer) error {
+
+	gitPath := filepath.Join(mc.RootPath, ".git")
 	dbPath := filepath.Join(gitPath, "objects")
-	repo := GenerateRepository(rootPath, gitPath, dbPath)
+	repo := GenerateRepository(mc.RootPath, gitPath, dbPath)
 
-	m, err := GenerateMerge("HEAD", args[0], repo)
+	m, err := GenerateMerge("HEAD", mc.Args[0], repo)
 	if err != nil {
 		return err
 	}
 
-	return RunMerge(rootPath, name, email, mergeMessage, m, w)
+	return RunMerge(mc, m, w)
 
 }

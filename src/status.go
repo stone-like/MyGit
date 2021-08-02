@@ -169,33 +169,35 @@ func StartStatus(w io.Writer, rootPath string, isLong bool) error {
 	gitPath := filepath.Join(rootPath, ".git")
 	dbPath := filepath.Join(gitPath, "objects")
 
-	i := data.GenerateIndex(filepath.Join(gitPath, "index"))
+	repo := GenerateRepository(rootPath, gitPath, dbPath)
 
-	_, indexNonExist := os.Stat(i.Path)
+	// i := data.GenerateIndex(filepath.Join(gitPath, "index"))
 
-	l := lock.NewFileLock(i.Path)
+	_, indexNonExist := os.Stat(repo.i.Path)
+
+	l := lock.NewFileLock(repo.i.Path)
 	l.Lock()
 	defer l.Unlock()
 
 	if indexNonExist == nil {
 		//.git/indexがある場合のみLoad、newFileLockで存在しないならindexを作ってしまうのでStatの後にしなければならない
-		err := i.Load()
+		err := repo.i.Load()
 		if err != nil {
 			return err
 		}
 	}
 
-	repo := GenerateRepository(rootPath, gitPath, dbPath)
+	// repo := GenerateRepository(rootPath, gitPath, dbPath)
 
 	s := GenerateStatus()
 
-	err := s.IntitializeStatus(repo, i)
+	err := s.IntitializeStatus(repo)
 	if err != nil {
 		return err
 	}
 
 	//変更されていたところはindexに反映、具体的にはtimeが違ってobjIdが同じケース
-	i.Write(i.Path)
+	repo.i.Write(repo.i.Path)
 	err = s.WriteStatus(w, isLong)
 	if err != nil {
 		return err
@@ -204,9 +206,9 @@ func StartStatus(w io.Writer, rootPath string, isLong bool) error {
 	return nil
 }
 
-func (s *Status) IntitializeStatus(repo *Repository, i *data.Index) error {
+func (s *Status) IntitializeStatus(repo *Repository) error {
 
-	err := ScanWorkSpace(repo.w, repo.w.Path, i, s)
+	err := ScanWorkSpace(repo.w, repo.w.Path, repo.i, s)
 
 	if err != nil {
 		return err
@@ -216,11 +218,11 @@ func (s *Status) IntitializeStatus(repo *Repository, i *data.Index) error {
 	if err != nil {
 		return err
 	}
-	err = s.CheckIndexEntry(i, repo.w)
+	err = s.CheckIndexEntry(repo.i, repo.w)
 	if err != nil {
 		return err
 	}
-	err = s.CollectDeletedHeadFiles(i)
+	err = s.CollectDeletedHeadFiles(repo.i)
 	if err != nil {
 		return err
 	}
@@ -325,15 +327,22 @@ func (s *Status) CheckIndexEntry(i *data.Index, w *WorkSpace) error {
 			return ErrorObjeToEntryConvError
 		}
 
-		err := s.CheckIndexAgainstWorkSpace(k.Path, e, i, w)
+		if e.GetStage() == 0 {
+			err := s.CheckIndexAgainstWorkSpace(k.Path, e, i, w)
 
-		if err != nil {
-			return err
-		}
+			if err != nil {
+				return err
+			}
 
-		err = s.CheckIndexAgainstHeadTree(k.Path, e)
-		if err != nil {
-			return err
+			err = s.CheckIndexAgainstHeadTree(k.Path, e)
+			if err != nil {
+				return err
+			}
+		} else {
+			//conflictしているときはchangedとconflictsに入れる
+			s.Changed = append(s.Changed, e.Path) //Changedに入れるのはPorceinのため、longではChangedを使わないはず
+
+			s.Conflicts[e.Path] = append(s.Conflicts[e.Path], e.GetStage())
 		}
 
 	}
@@ -347,12 +356,14 @@ func GenerateStatus() *Status {
 		WorkSpaceChanges: make(map[string]int),
 		Stats:            make(map[string]con.FileState),
 		HeadTree:         make(map[string]*con.Entry),
+		Conflicts:        make(map[string][]int),
 	}
 }
 
 type Status struct {
 	Untracked        []string
 	Changed          []string
+	Conflicts        map[string][]int
 	Stats            map[string]con.FileState
 	HeadTree         map[string]*con.Entry
 	IndexChanges     map[string]int

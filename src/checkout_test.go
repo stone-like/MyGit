@@ -84,13 +84,13 @@ func TestPrintDetach(t *testing.T) {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	CreateFiles(t, tempPath, "a.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	var buf1 bytes.Buffer
@@ -109,7 +109,7 @@ func TestPrintDetach(t *testing.T) {
 	CreateFiles(t, xxxPath, "dup.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test3")
+	err = StartCommit(tempPath, "test", "test@example.com", "test3", &buf)
 	assert.NoError(t, err)
 
 	ret, err := ParseRev("master^")
@@ -148,7 +148,7 @@ func TestPrintPreviousHead(t *testing.T) {
 	ss := []string{"."}
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test")
+	err = StartCommit(tempPath, "test", "test@example.com", "test", &buf)
 	assert.NoError(t, err)
 
 	CreateFiles(t, tempPath, "a.txt", "test\n")
@@ -156,7 +156,7 @@ func TestPrintPreviousHead(t *testing.T) {
 	assert.NoError(t, err)
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test2")
+	err = StartCommit(tempPath, "test", "test@example.com", "test2", &buf)
 	assert.NoError(t, err)
 
 	var buf1 bytes.Buffer
@@ -175,7 +175,7 @@ func TestPrintPreviousHead(t *testing.T) {
 	CreateFiles(t, xxxPath, "dup.txt", "test\n")
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
-	err = StartCommit(tempPath, "test", "test@example.com", "test3")
+	err = StartCommit(tempPath, "test", "test@example.com", "test3", &buf)
 	assert.NoError(t, err)
 
 	ret, err := ParseRev("master^")
