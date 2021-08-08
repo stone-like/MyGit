@@ -180,6 +180,20 @@ func (w *WorkSpace) ApplyMigration(m *Migration) error {
 	return nil
 }
 
+func (w *WorkSpace) Remove(path string) error {
+	err := os.RemoveAll(filepath.Join(w.Path, path))
+	if err != nil {
+		return err
+	}
+
+	err = util.DeleteParentDir(path, w.Path)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (w *WorkSpace) RemoveDir(path string) error {
 	err := os.RemoveAll(filepath.Join(w.Path, path))
 	if err != nil {

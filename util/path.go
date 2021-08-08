@@ -1,6 +1,7 @@
 package util
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,14 +43,52 @@ func createParentDirs(path string) []string {
 
 }
 
-func ParentDirs(path string) []string {
+func ParentDirs(path string, ascend bool) []string {
 	ret := createParentDirs(path)
-	sort.Slice(ret, func(i, j int) bool {
-		return len(ret[i]) < len(ret[j])
-	})
+
+	if ascend {
+		// xxx/yyy
+		// xxxの順番
+		sort.Slice(ret, func(i, j int) bool {
+			return len(ret[i]) > len(ret[j])
+		})
+	} else {
+		// xxx
+		// xxx/yyyの順番
+		sort.Slice(ret, func(i, j int) bool {
+			return len(ret[i]) < len(ret[j])
+		})
+	}
 
 	return ret
+}
 
+func DeleteParentDir(path, rootpath string) error {
+	for _, p := range ParentDirs(path, true) {
+		absPath := filepath.Join(rootpath, p)
+		if absPath == rootpath {
+			break
+		}
+
+		files, err := ioutil.ReadDir(absPath)
+		if err != nil {
+			return err
+		}
+
+		if len(files) != 0 {
+			//Dirが空でなければ削除しない
+			break
+		}
+
+		err = os.Remove(absPath)
+
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
 }
 
 //WorkSpaceの奴ではなくこちらを主に使うようにする、

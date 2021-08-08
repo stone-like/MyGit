@@ -221,3 +221,33 @@ func Test_RecursiveTree(t *testing.T) {
 		t.Errorf("diff is %s\n", diff)
 	}
 }
+
+func TestRecursiveDelete(t *testing.T) {
+	cur, err := os.Getwd()
+	assert.NoError(t, err)
+	tempPath, err := ioutil.TempDir(cur, "")
+	assert.NoError(t, err)
+
+	defer os.RemoveAll(tempPath)
+
+	xxxPath := filepath.Join(tempPath, "xxx")
+	err = os.MkdirAll(xxxPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	stat, _ := os.Stat(xxxPath)
+	assert.NotNil(t, stat)
+
+	CreateFiles(t, tempPath, "hello.txt", "test\n")
+	CreateFiles(t, xxxPath, "dummy.txt", "test2\n")
+
+	gitPath := filepath.Join(tempPath, ".git")
+	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(tempPath, gitPath, dbPath)
+
+	//xxx中唯一のファイルdumnmy.txtをremove時にxxxも消えることを確認
+	err = repo.w.Remove("xxx/dummy.txt")
+	assert.NoError(t, err)
+
+	stat, _ = os.Stat(xxxPath)
+	assert.Nil(t, stat)
+}

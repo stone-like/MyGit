@@ -112,6 +112,11 @@ func (e *Entry) IsTree() bool {
 	return e.Mode == int(i)
 }
 
+func ModeToInt(mode string) int {
+	i, _ := strconv.ParseInt(mode, 8, 64)
+	return int(i)
+}
+
 func ModeToString(mode int) string {
 	return fmt.Sprintf("%o", mode)
 }

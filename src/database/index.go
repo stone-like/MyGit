@@ -80,12 +80,22 @@ func (i *Index) RunEntryForPath(path string, stage int) (*con.Entry, bool) {
 
 }
 
+func (i *Index) ChildPaths(path string) []string {
+	return i.Parents[path]
+}
+
 func (i *Index) IsIndexed(path string) bool {
 	entOk := i.IsIndexedFile(path)
-	_, parOk := i.Parents[path]
+	parOk := i.IsIndexedDir(path)
 
 	return entOk || parOk
 }
+
+func (i *Index) IsIndexedDir(path string) bool {
+	_, parOk := i.Parents[path]
+	return parOk
+}
+
 func (i *Index) IsIndexedFile(path string) bool {
 	//stage0~3の内どれか一つでもあればTrackedile
 	var entOk bool

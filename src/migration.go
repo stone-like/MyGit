@@ -245,7 +245,7 @@ func (m *Migration) CheckForConflict(path string, oldEntry, newEntry *con.Entry)
 //""でerrorがnillならuntrackedのやつは親に存在しない
 func (m *Migration) UntrackedParent(path string) (string, error) {
 	//workspaceに存在しないファイルの親を調べる(親にuntrackedが残っていたらアウトなので)
-	for _, d := range util.ParentDirs(path) {
+	for _, d := range util.ParentDirs(path, false) {
 		//treediffに存在するPathで、worksapaceに存在せず、その親もworkspaceに存在しない場合があるので、
 		//まずとってきた親候補が存在するかチェックする
 		stat, _ := os.Stat(filepath.Join(m.repo.w.Path, d))

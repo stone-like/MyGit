@@ -3,6 +3,9 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"io"
+
+	ers "github.com/pkg/errors"
 )
 
 type ParseError interface {
@@ -60,6 +63,26 @@ func (c *ConflictOccurError) Error() string {
 	return "conflictOccurError"
 }
 
+func (c *ConflictOccurError) GetContent() string {
+	return c.ConflictDetail
+}
+
+type InvalidIndexPathOnRemovalError struct {
+	Message string
+}
+
+func (i *InvalidIndexPathOnRemovalError) UserCause() string {
+	return i.Message
+}
+
+func (i *InvalidIndexPathOnRemovalError) Error() string {
+	return "invalidIndexPathOnRemovalError"
+}
+
+func (i *InvalidIndexPathOnRemovalError) GetContent() string {
+	return i.Message
+}
+
 type InternalError interface {
 	Cause() string
 }
@@ -74,4 +97,23 @@ func (i *InvalidFormatError) UserCause() string {
 
 func (i *InvalidFormatError) Error() string {
 	return fmt.Sprintf("%s is invalid format name\n", i.FormatName)
+}
+
+type WillWriteError interface {
+	GetContent() string
+}
+
+func HandleWillWriteError(err error, w io.Writer) error {
+	//WillWriteErrorだったらwriteに書いて終わり、それ以上errorは伝播させず
+	//nilとする
+
+	willWrite, ok := ers.Cause(err).(WillWriteError)
+	if !ok {
+		return err
+	}
+
+	w.Write([]byte(willWrite.GetContent()))
+
+	return nil
+
 }

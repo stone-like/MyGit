@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"mygit/src/crypt"
 	c "mygit/src/database/content"
+	con "mygit/src/database/content"
 	"mygit/util"
 	"os"
 	"path/filepath"
@@ -245,4 +246,66 @@ func (d *Database) ShortObjId(objId string) string {
 
 func (d *Database) ObjDirname(name string) string {
 	return filepath.Join(d.Path, name[0:2])
+}
+
+//pathなしならCommitからTree,pathありならTreeからそのpathのBlobを返す(両方ともEntryの形として)
+
+func (d *Database) LoadTreeEntry(objId string) (*con.Entry, error) {
+	return d.RunLoadTreeEntry(objId, "")
+}
+func (d *Database) LoadTreeEntryWithPath(objId, path string) (*con.Entry, error) {
+	return d.RunLoadTreeEntry(objId, path)
+}
+func (d *Database) RunLoadTreeEntry(objId, path string) (*con.Entry, error) {
+	o, err := d.ReadObject(objId)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := o.(*con.CommitFromMem)
+	if !ok {
+		return nil, ErrorObjeToEntryConvError
+	}
+
+	rootTreeEntry := &con.Entry{
+		ObjId: c.Tree,
+		Mode:  con.ModeToInt(con.DIRECTORY_MODE),
+	}
+
+	if path == "" {
+		return rootTreeEntry, nil
+	}
+
+	var currentEntry con.Object //基本的にTree,最後の1ループでcurrentEntryにBlobがセットされる
+	currentEntry = rootTreeEntry
+	//DescendをrelativePathで使う想定
+	for _, p := range util.Descend(path) {
+		if currentEntry == nil {
+			break
+		}
+		o, err := d.ReadObject(currentEntry.GetObjId())
+		if err != nil {
+			return nil, err
+		}
+		// 最後の1ループでcurrentEntryにBlobがセットされる、それまでは全部TreeなのでここでTreeConversionをしてよい
+		t, ok := o.(*con.Tree)
+		if !ok {
+			return nil, ErrorObjeToEntryConvError
+		}
+
+		newEntry := t.Entries[p]
+
+		currentEntry = newEntry
+
+	}
+
+	//blobだろうが、treeだろうがEntryの形であることには変わりない
+	e, entryOk := currentEntry.(*con.Entry)
+
+	if !entryOk {
+		return nil, ErrorObjeToEntryConvError
+	}
+
+	return e, nil
+
 }

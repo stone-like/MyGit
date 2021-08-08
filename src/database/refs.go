@@ -145,7 +145,7 @@ func (r *Refs) DeleteBranch(path string) (string, error) {
 	}
 	//refs/heads/features/xxxがあったとして、今xxxを削除してfeaturesが空になったとする
 	//そうするとfeaturesを削除したい(headsまでは削除しない)
-	err = r.DeleteParentDir(path)
+	err = util.DeleteParentDir(path, r.HeadsPath())
 	if err != nil {
 		return "", err
 	}
@@ -153,33 +153,33 @@ func (r *Refs) DeleteBranch(path string) (string, error) {
 	return objId, nil
 }
 
-func (r *Refs) DeleteParentDir(path string) error {
-	for _, p := range util.ParentDirs(path, true) {
-		absPath := filepath.Join(r.HeadsPath(), p)
-		if absPath == r.HeadsPath() {
-			break
-		}
+// func (r *Refs) DeleteParentDir(path string) error {
+// 	for _, p := range util.ParentDirs(path, true) {
+// 		absPath := filepath.Join(r.HeadsPath(), p)
+// 		if absPath == r.HeadsPath() {
+// 			break
+// 		}
 
-		files, err := ioutil.ReadDir(absPath)
-		if err != nil {
-			return err
-		}
+// 		files, err := ioutil.ReadDir(absPath)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		if len(files) != 0 {
-			//Dirが空でなければ削除しない
-			break
-		}
+// 		if len(files) != 0 {
+// 			//Dirが空でなければ削除しない
+// 			break
+// 		}
 
-		err = os.Remove(absPath)
+// 		err = os.Remove(absPath)
 
-		if err != nil {
-			return err
-		}
+// 		if err != nil {
+// 			return err
+// 		}
 
-	}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (r *Refs) ListBranches() ([]*SymRef, error) {
 	return r.ListRefs(r.HeadsPath())

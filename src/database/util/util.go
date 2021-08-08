@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"io/ioutil"
 	"mygit/src/database/content"
 	"os"
 	"path/filepath"
@@ -138,6 +139,34 @@ func ParentDirs(path string, ascend bool) []string {
 	}
 
 	return ret
+}
+
+func DeleteParentDir(path, rootpath string) error {
+	for _, p := range ParentDirs(path, true) {
+		absPath := filepath.Join(rootpath, p)
+		if absPath == rootpath {
+			break
+		}
+
+		files, err := ioutil.ReadDir(absPath)
+		if err != nil {
+			return err
+		}
+
+		if len(files) != 0 {
+			//Dirが空でなければ削除しない
+			break
+		}
+
+		err = os.Remove(absPath)
+
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
 }
 
 func FilePathWalkDir(root string, ignoreList []string) ([]string, error) {

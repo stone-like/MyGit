@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//diffの原理は大体理解したのでいったん既存の奴を使う、ブランチまで終わったら自力で実装
+// //diffの原理は大体理解したのでいったん既存の奴を使う、ブランチまで終わったら自力で実装
 // func TestDiff(t *testing.T) {
 // 	cur, err := os.Getwd()
 // 	assert.NoError(t, err)
