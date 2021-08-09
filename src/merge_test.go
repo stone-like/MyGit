@@ -955,3 +955,73 @@ func TestNoMergeMessageAfterCommitWithAddingIndex(t *testing.T) {
 	}
 
 }
+
+func TestAbortAfterCommitWithAddingIndex(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときにabortをしたとき
+
+	tempPath := PrepareConflictMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"},
+		Option: MergeOption{hasAbort: true},
+	}
+
+	b, err := ioutil.ReadFile(filepath.Join(tempPath, "hello.txt"))
+	assert.NoError(t, err)
+	str := string(b)
+	if diff := cmp.Diff(`<<<<<<< HEAD
+masterChanged
+
+=======
+test1Changed
+
+>>>>>>> test1
+`, str); diff != "" {
+		t.Errorf("diff is %s\n", diff)
+	}
+
+	var newBuf bytes.Buffer
+
+	err = StartMerge(mc, &newBuf)
+	assert.NoError(t, err)
+
+	stat, _ := os.Stat(filepath.Join(gitPath, Merge_HEAD))
+	assert.Nil(t, stat)
+	stat, _ = os.Stat(filepath.Join(gitPath, Merge_MSG))
+	assert.Nil(t, stat)
+
+	// A -> B -> D master
+	//   \    /
+	//     C   test1
+	//helloPathがconflictする前のHEAD,Bの状態、masterChanged\nになっていること
+	b, err = ioutil.ReadFile(filepath.Join(tempPath, "hello.txt"))
+	assert.NoError(t, err)
+	assert.Equal(t, "masterChanged\n", string(b))
+
+}
+
+func TestAbortError(t *testing.T) {
+	//すでにマージしてコンフリクト済みのときに、マージとコミットをしたときのメッセージ
+
+	tempPath := PrepareMerge(t)
+	t.Cleanup(func() {
+		os.RemoveAll(tempPath)
+	})
+
+	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"},
+		Option: MergeOption{hasAbort: true},
+	}
+
+	var newBuf bytes.Buffer
+
+	StartMerge(mc, &newBuf)
+
+	str := newBuf.String()
+
+	if diff := cmp.Diff("There is no merge to abort (Merge_HEAD missing).", str); diff != "" {
+		t.Errorf("diff is %s\n", diff)
+	}
+
+}

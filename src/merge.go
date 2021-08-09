@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"mygit/src/database/lock"
+	ers "mygit/src/errors"
 	"path/filepath"
 )
 
@@ -175,10 +176,51 @@ func HandleInProgressMerge(w io.Writer) {
 
 }
 
+//abortはmergeでconflictする前のHEADの状態に戻す
+func HandleAbort(pc *PendingCommit, mc MergeCommand, repo *Repository, w io.Writer) error {
+	err := pc.Clear()
+	if err != nil {
+		return err
+	}
+
+	l := lock.NewFileLock(repo.i.Path)
+	l.Lock()
+	defer l.Unlock()
+
+	err = repo.i.Load()
+	if err != nil {
+		return err
+	}
+
+	headObjId, err := repo.r.ReadHead()
+	if err != nil {
+		return err
+	}
+
+	//元のHEADの状態に戻す
+	err = HanldeHard(headObjId, repo)
+	if err != nil {
+		return err
+	}
+
+	err = repo.i.Write(repo.i.Path)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func RunMerge(mc MergeCommand, m *Merge, w io.Writer) error {
 
 	//3-wayMerge開始時にcommit中断用のファイルを作る
 	pc := GeneratePendingCommit(filepath.Join(mc.RootPath, ".git"))
+
+	//--abortの時
+	if mc.Option.hasAbort {
+		return HandleAbort(pc, mc, m.repo, w)
+	}
+
+	//--continueの時
 	//conflictでcommit出来なかったやつをここでcommitしてMergeHeadを消す,--continueの時はここで終わり
 	//conflictのあとはadd . -> merge --c or commitで解消する、merge --cのときはこっち
 	if mc.Option.hasContinue {
@@ -237,6 +279,7 @@ func RunMerge(mc MergeCommand, m *Merge, w io.Writer) error {
 
 type MergeOption struct {
 	hasContinue bool
+	hasAbort    bool
 }
 
 type MergeCommand struct {
@@ -259,6 +302,6 @@ func StartMerge(mc MergeCommand, w io.Writer) error {
 		return err
 	}
 
-	return RunMerge(mc, m, w)
+	return ers.HandleWillWriteError(RunMerge(mc, m, w), w)
 
 }

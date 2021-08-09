@@ -248,6 +248,76 @@ func (d *Database) ObjDirname(name string) string {
 	return filepath.Join(d.Path, name[0:2])
 }
 
+//mに指定したPathのTree以下のすべてのBlobを追加
+func (d *Database) BuildList(path string, m map[string]*con.Entry, e *con.Entry) (map[string]*con.Entry, error) {
+
+	if e == nil {
+		return nil, nil
+	}
+
+	//Blobの時
+	if !e.IsTree() {
+		m[path] = e
+		return m, nil
+	}
+
+	//Treeの時
+	o, err := d.ReadObject(e.GetObjId())
+	if err != nil {
+		return nil, err
+	}
+	t, ok := o.(*con.Tree)
+	if !ok {
+		return nil, ErrorObjeToEntryConvError
+	}
+
+	for _, o := range t.Entries {
+		e, ok := o.(*con.Entry)
+
+		if !ok {
+			return nil, ErrorObjeToEntryConvError
+		}
+
+		_, err := d.BuildList(e.Path, m, e)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return m, err
+
+}
+
+func (d *Database) LoadTreeList(objId string) (map[string]*con.Entry, error) {
+	return d.RunLoadTreeList(objId, "")
+}
+
+func (d *Database) LoadTreeListWithPath(objId, path string) (map[string]*con.Entry, error) {
+	return d.RunLoadTreeList(objId, path)
+}
+
+func (d *Database) RunLoadTreeList(objId, path string) (map[string]*con.Entry, error) {
+
+	if objId == "" {
+		return nil, nil
+	}
+
+	e, err := d.RunLoadTreeEntry(objId, path)
+	if err != nil {
+		return nil, err
+	}
+
+	m := make(map[string]*con.Entry)
+
+	buildedMap, err := d.BuildList(path, m, e)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildedMap, err
+
+}
+
 //pathなしならCommitからTree,pathありならTreeからそのpathのBlobを返す(両方ともEntryの形として)
 
 func (d *Database) LoadTreeEntry(objId string) (*con.Entry, error) {

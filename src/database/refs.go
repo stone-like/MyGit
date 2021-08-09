@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var ORIG_HEAD = "ORIG_HEAD"
+
 type Refs struct {
 	Path string
 }
@@ -324,6 +326,14 @@ func (r *Refs) CreateHeadPath(path string) error {
 
 }
 
+//pathのときはUpdateRef経由
+//objId,symRefのときはUpdateSymRef,UpdateHead経由
+func (r *Refs) UpdateRef(path, objId string) error {
+	//.git/pathにobjIdを書き込む
+	//例としてpath=ORIG_HEAD
+	return r.UpdateRefFile(filepath.Join(r.Path, path), objId)
+}
+
 func (r *Refs) UpdateRefFile(path, objId string) error {
 	err := r.CreateHeadPath(path)
 
@@ -360,19 +370,19 @@ func (r *Refs) UpdateRefFile(path, objId string) error {
 
 }
 
-func (r *Refs) UpdateHead(objId string) error {
-	r.UpdateSymRef(r.HeadPath(), objId)
-	return nil
+func (r *Refs) UpdateHead(objId string) (string, error) {
+	return r.UpdateSymRef(r.HeadPath(), objId)
+
 }
 
-func (r *Refs) UpdateSymRef(path, objId string) error {
+func (r *Refs) UpdateSymRef(path, objId string) (string, error) {
 	l := lock.NewFileLock(path)
 	l.Lock()
 	defer l.Unlock()
 
 	ref, err := r.ReadObjIdOrSymRef(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	symRef, ok := ref.(*SymRef)
@@ -382,7 +392,7 @@ func (r *Refs) UpdateSymRef(path, objId string) error {
 		//Refの場合
 		f, err := os.Create(path)
 		if err != nil {
-			return err
+			return "", err
 		}
 		defer func() {
 			err := f.Close()
@@ -391,15 +401,17 @@ func (r *Refs) UpdateSymRef(path, objId string) error {
 			}
 		}()
 		f.Write([]byte(fmt.Sprintf("%s\n", objId)))
-	} else {
-		//SymRefの場合
-		err = r.UpdateSymRef(filepath.Join(r.Path, symRef.GetObjIdOrPath()), objId)
-		if err != nil {
-			return err
-		}
+		//refなのでobjIdが返る,ここでUpdateする前の元々のobjIdを返すのはORIG_HEADに書き込むため
+		return ref.GetObjIdOrPath(), nil
 	}
 
-	return nil
+	//SymRefの場合,(最終的にRefにたどり着き、ここまでobjIdが返ってくる)
+	objId, err = r.UpdateSymRef(filepath.Join(r.Path, symRef.GetObjIdOrPath()), objId)
+	if err != nil {
+		return "", err
+	}
+
+	return objId, nil
 
 }
 

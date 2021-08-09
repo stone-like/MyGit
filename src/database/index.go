@@ -196,6 +196,23 @@ func (i *Index) RemoveChildren(path string) {
 	}
 }
 
+//workSpace由来でないときに
+func (i *Index) AddFromDB(path string, e *con.Entry) {
+	eFromDB := con.CreateEntryFromDB(0, path, e)
+	i.StoreEntry(eFromDB)
+	i.Changed = true
+}
+
+func (i *Index) Clear() *Index {
+	return GenerateIndex(i.Path)
+}
+
+func (i *Index) Reset() *Index {
+	newi := i.Clear()
+	newi.Changed = true
+	return newi
+}
+
 func (i *Index) DiscardConflicts(e *con.Entry) error {
 	for _, p := range e.ParentDirs(e.Path) {
 		i.RemoveEntry(p) //dummy.txt -> dummy.txt/nested.txtのときに対応

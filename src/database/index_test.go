@@ -122,3 +122,5 @@ func Test_ReadFromFile(t *testing.T) {
 	}
 
 }
+
+//indexのclearをテスト

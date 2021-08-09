@@ -102,6 +102,10 @@ func (w *WorkSpace) FilePathWalkDir(root string, ignoreList []string) ([]string,
 	var files []string
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
 		p, er := filepath.Rel(root, path)
 
 		if er != nil {
@@ -138,7 +142,26 @@ func pathMatch(s []string, e string) (bool, error) {
 }
 
 func (w *WorkSpace) WriteFile(path, content string) error {
-	f, err := os.Create(filepath.Join(w.Path, path))
+	return w.RunWriteFile(path, content, -1)
+}
+func (w *WorkSpace) WriteFileWithMode(path, content string, mode int) error {
+	return w.RunWriteFile(path, content, mode)
+}
+
+func (w *WorkSpace) RunWriteFile(path, content string, mode int) error {
+
+	absPath := filepath.Join(w.Path, path)
+
+	absDirPath := filepath.Dir(absPath)
+
+	if stat, _ := os.Stat(absDirPath); stat == nil {
+		err := os.MkdirAll(absDirPath, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+
+	f, err := os.Create(absPath)
 
 	defer func() {
 		err := f.Close()
@@ -152,6 +175,10 @@ func (w *WorkSpace) WriteFile(path, content string) error {
 	}
 
 	f.Write([]byte(content))
+
+	if mode != -1 {
+		os.Chmod(absPath, fs.FileMode(mode))
+	}
 
 	return nil
 }

@@ -207,6 +207,19 @@ func StartStatus(w io.Writer, rootPath string, isLong bool) error {
 }
 
 func (s *Status) IntitializeStatus(repo *Repository) error {
+	//commitObjIdを指定しない場合Headとする
+	objId, err := repo.r.ReadHead()
+	if err != nil {
+		return err
+	}
+	return s.RunIntitializeStatus(objId, repo)
+}
+
+func (s *Status) IntitializeStatusWithObjId(commitObjId string, repo *Repository) error {
+	return s.RunIntitializeStatus(commitObjId, repo)
+}
+
+func (s *Status) RunIntitializeStatus(commitObjId string, repo *Repository) error {
 
 	err := ScanWorkSpace(repo.w, repo.w.Path, repo.i, s)
 
@@ -214,10 +227,18 @@ func (s *Status) IntitializeStatus(repo *Repository) error {
 		return err
 	}
 
-	err = s.LoadHead(repo.r, repo.d)
+	// err = s.LoadHead(repo.r, repo.d)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// CheckIndexAgainstHeadTree、CollectDeletedHeadFilesのときに指定したcommitIdの状態と現在のIndexを比較できる
+	headTree, err := repo.d.LoadTreeList(commitObjId)
 	if err != nil {
 		return err
 	}
+	s.HeadTree = headTree
+
 	err = s.CheckIndexEntry(repo.i, repo.w)
 	if err != nil {
 		return err

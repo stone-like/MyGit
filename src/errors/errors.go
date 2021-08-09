@@ -83,6 +83,22 @@ func (i *InvalidIndexPathOnRemovalError) GetContent() string {
 	return i.Message
 }
 
+type FileNotExistOnConflictError struct {
+	Message string
+}
+
+func (f *FileNotExistOnConflictError) UserCause() string {
+	return f.Message
+}
+
+func (f *FileNotExistOnConflictError) Error() string {
+	return "FileNotExistOnConflictError"
+}
+
+func (f *FileNotExistOnConflictError) GetContent() string {
+	return f.Message
+}
+
 type InternalError interface {
 	Cause() string
 }

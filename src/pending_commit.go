@@ -1,8 +1,10 @@
 package src
 
 import (
+	"fmt"
 	"io/ioutil"
 	"mygit/src/database/lock"
+	ers "mygit/src/errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,9 +72,20 @@ func (p *PendingCommit) Start(objId, message string) error {
 }
 
 func (p *PendingCommit) Clear() error {
+	if stat, _ := os.Stat(p.HeadPath); stat == nil {
+		return &ers.FileNotExistOnConflictError{
+			Message: fmt.Sprintf("There is no merge to abort (%s missing).", filepath.Base(p.HeadPath)),
+		}
+	}
 	err := os.RemoveAll(p.HeadPath)
 	if err != nil {
 		return err
+	}
+
+	if stat, _ := os.Stat(p.MessagePath); stat == nil {
+		return &ers.FileNotExistOnConflictError{
+			Message: fmt.Sprintf("There is no merge to abort (%s missing).", filepath.Base(p.MessagePath)),
+		}
 	}
 	err = os.RemoveAll(p.MessagePath)
 	if err != nil {

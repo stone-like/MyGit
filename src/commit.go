@@ -121,7 +121,7 @@ func WriteCommit(parents []string, name, email, message string, repo *Repository
 
 	repo.d.Store(c)
 
-	err = repo.r.UpdateHead(c.ObjId)
+	_, err = repo.r.UpdateHead(c.ObjId)
 	if err != nil {
 		return err
 	}

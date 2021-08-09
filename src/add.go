@@ -8,29 +8,31 @@ import (
 	"path/filepath"
 )
 
+//Addの時にindexとworkspaceを比較してdeletedなファイルの場合は、indexからも削除
 func StartAdd(rootPath, uName, uEmail, message string, selectedPath []string) error {
 	gitPath := filepath.Join(rootPath, ".git")
 	dbPath := filepath.Join(gitPath, "objects")
+	repo := GenerateRepository(rootPath, gitPath, dbPath)
 
-	w := &WorkSpace{
-		Path: rootPath,
-	}
+	// w := &WorkSpace{
+	// 	Path: rootPath,
+	// }
 
-	d := &data.Database{
-		Path: dbPath,
-	}
+	// d := &data.Database{
+	// 	Path: dbPath,
+	// }
 
-	i := data.GenerateIndex(filepath.Join(gitPath, "index"))
+	// i := data.GenerateIndex(filepath.Join(gitPath, "index"))
 
-	_, indexNonExist := os.Stat(i.Path)
+	_, indexNonExist := os.Stat(repo.i.Path)
 
-	l := lock.NewFileLock(i.Path)
+	l := lock.NewFileLock(repo.i.Path)
 	l.Lock()
 	defer l.Unlock()
 
 	if indexNonExist == nil {
 		//.git/indexがある場合のみLoad、newFileLockで存在しないならindexを作ってしまうのでStatの後にしなければならない
-		err := i.Load()
+		err := repo.i.Load()
 		if err != nil {
 			return err
 		}
@@ -39,7 +41,7 @@ func StartAdd(rootPath, uName, uEmail, message string, selectedPath []string) er
 	for _, path := range selectedPath {
 		//selectedPathに"."を指定した場合,filepath.Join("aaa/bbb",".")="aaa/bbb"となる
 		absPath := filepath.Join(rootPath, path)
-		pathList, err := w.ListFiles(absPath)
+		pathList, err := repo.w.ListFiles(absPath)
 
 		if err != nil {
 			return err
@@ -47,7 +49,7 @@ func StartAdd(rootPath, uName, uEmail, message string, selectedPath []string) er
 
 		if len(pathList) == 0 {
 			//file
-			err = AddIndex(path, i, w, d)
+			err = AddIndex(path, repo)
 			if err != nil {
 				return err
 			}
@@ -55,7 +57,7 @@ func StartAdd(rootPath, uName, uEmail, message string, selectedPath []string) er
 			//dir
 			for _, innerPath := range pathList {
 				relPathFromRoot := filepath.Join(path, innerPath)
-				err = AddIndex(relPathFromRoot, i, w, d)
+				err = AddIndex(relPathFromRoot, repo)
 				if err != nil {
 					return err
 				}
@@ -64,13 +66,28 @@ func StartAdd(rootPath, uName, uEmail, message string, selectedPath []string) er
 
 	}
 
-	i.Write(i.Path)
+	//workspaceから削除されたファイルをindexからも削除
+	s := GenerateStatus()
+	//指定したcommitObjIdでstatusをみる
+	err := s.IntitializeStatus(repo)
+	if err != nil {
+		return err
+	}
+
+	for path, status := range s.WorkSpaceChanges {
+		//workSpaceとindexの変化でworkSpaceになくてIndexにあるものはAddの時IndexからもRemove
+		if status == WORKSPACE_DELETE {
+			repo.i.Remove(path)
+		}
+	}
+
+	repo.i.Write(repo.i.Path)
 
 	return nil
 }
 
-func AddIndex(path string, i *data.Index, w *WorkSpace, d *data.Database) error {
-	c, err := w.ReadFile(path)
+func AddIndex(path string, repo *Repository) error {
+	c, err := repo.w.ReadFile(path)
 
 	if err != nil {
 		return err
@@ -80,15 +97,15 @@ func AddIndex(path string, i *data.Index, w *WorkSpace, d *data.Database) error 
 		Content: c,
 	}
 
-	d.Store(b)
+	repo.d.Store(b)
 
-	stat, err := w.StatFile(path)
+	stat, err := repo.w.StatFile(path)
 
 	if err != nil {
 		return err
 	}
 
-	err = i.Add(path, b.ObjId, stat, data.CreateIndex)
+	err = repo.i.Add(path, b.ObjId, stat, data.CreateIndex)
 
 	if err != nil {
 		return err
