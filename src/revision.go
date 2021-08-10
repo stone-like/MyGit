@@ -176,6 +176,7 @@ func ResolveRef(r *Ref, repo *Repository) (string, error) {
 		return objId, nil
 	}
 
+	//このobjDir以降によってr.nameがブランチでなくてobjIdでも処理できる
 	//oidはobjectPathのdirname+pathnameなので
 	objDir := repo.d.ObjDirname(r.Name)
 

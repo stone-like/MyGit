@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	ers "mygit/src/errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -356,9 +357,8 @@ func Test_SamePathConflictContent(t *testing.T) {
 
 	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
 
-	err = RunMerge(mc, m, &buf)
+	err = ers.HandleWillWriteError(RunMerge(mc, m, &buf), &buf)
 	assert.NoError(t, err)
-
 	//workspace更新を確認
 	c1, err := ioutil.ReadFile(filepath.Join(tempPath, "hello.txt"))
 	assert.NoError(t, err)
@@ -476,7 +476,7 @@ func Test_SamePathConflictMod(t *testing.T) {
 
 	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
 
-	err = RunMerge(mc, m, &buf)
+	err = ers.HandleWillWriteError(RunMerge(mc, m, &buf), &buf)
 	assert.NoError(t, err)
 
 	//workspace更新を確認
@@ -607,7 +607,7 @@ func Test_FileDirConflict(t *testing.T) {
 
 	mc := MergeCommand{RootPath: tempPath, Name: "test", Email: "test@email.com", Message: "merged", Args: []string{"test1"}}
 
-	err = RunMerge(mc, m, &buf)
+	err = ers.HandleWillWriteError(RunMerge(mc, m, &buf), &buf)
 	assert.NoError(t, err)
 
 	//workspace更新を確認
@@ -783,7 +783,8 @@ func TestCommitWithoutAddingIndex(t *testing.T) {
 		os.RemoveAll(tempPath)
 	})
 
-	expect := `error: Commiting is not possible because you have unmerged files/nhint: Fix them up in the work tree, and then use 'mygit add/rm <file>'
+	expect := `error: Commiting is not possible because you have unmerged files
+hint: Fix them up in the work tree, and then use 'mygit add/rm <file>'
 hint: as appropriate to mark resolution and make a commit.
 fatal: Exiting because of an unresolved conflict.
 `
@@ -950,7 +951,7 @@ func TestNoMergeMessageAfterCommitWithAddingIndex(t *testing.T) {
 
 	str := newBuf.String()
 
-	if diff := cmp.Diff("There is no merge in progress (Merge_HEAD missng).\n", str); diff != "" {
+	if diff := cmp.Diff("There is no merge in progress (MERGE_HEAD missng).\n", str); diff != "" {
 		t.Errorf("diff is %s\n", diff)
 	}
 
@@ -1020,7 +1021,7 @@ func TestAbortError(t *testing.T) {
 
 	str := newBuf.String()
 
-	if diff := cmp.Diff("There is no merge to abort (Merge_HEAD missing).", str); diff != "" {
+	if diff := cmp.Diff("There is no merge to abort (MERGE_HEAD missing).", str); diff != "" {
 		t.Errorf("diff is %s\n", diff)
 	}
 

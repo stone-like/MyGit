@@ -99,6 +99,22 @@ func (f *FileNotExistOnConflictError) GetContent() string {
 	return f.Message
 }
 
+type MergeFailOnConflictError struct {
+	Message string
+}
+
+func (m *MergeFailOnConflictError) UserCause() string {
+	return m.Message
+}
+
+func (m *MergeFailOnConflictError) Error() string {
+	return "MergeFailOnConflictError"
+}
+
+func (m *MergeFailOnConflictError) GetContent() string {
+	return m.Message
+}
+
 type InternalError interface {
 	Cause() string
 }

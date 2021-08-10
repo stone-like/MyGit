@@ -77,7 +77,7 @@ func (m *Merge) ResolveMerge(w io.Writer) error {
 }
 
 func (m *Merge) CommitMerge(name, email, message string) error {
-	err := WriteCommit([]string{m.leftObjId, m.rightObjId}, name, email, message, m.repo)
+	err := ProcessCommit([]string{m.leftObjId, m.rightObjId}, name, email, message, m.repo)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (m *Merge) HandleFastForward(w io.Writer) error {
 var AlreadyMergedMessage = "Already up to date\n"
 var MergeFaildMessage = "Automatic merge failed: fix conflicts and then commit the result.\n"
 
-func HandleContinue(pc *PendingCommit, mc MergeCommand, repo *Repository, w io.Writer) error {
+func HandleContinue(pc *PendingCommit, mc MergeCommand, repo *Repository) error {
 	//conflict後マージを再開するとき
 	err := repo.i.Load()
 	if err != nil {
@@ -155,9 +155,9 @@ func HandleContinue(pc *PendingCommit, mc MergeCommand, repo *Repository, w io.W
 	err = ResumeMerge(
 		mc.Name,
 		mc.Email,
+		PENDING_MERGE_TYPE,
 		pc,
 		repo,
-		w,
 	)
 	if err != nil {
 		return err
@@ -169,16 +169,19 @@ func HandleContinue(pc *PendingCommit, mc MergeCommand, repo *Repository, w io.W
 
 var INPROGRESS_MESSAGE = "Merging is not possible because youy unmerged files"
 
-func HandleInProgressMerge(w io.Writer) {
-	w.Write([]byte(fmt.Sprintf("error: %s\n", INPROGRESS_MESSAGE)))
-	w.Write([]byte(CONFLICT_MESSAGE))
-	w.Write([]byte("\n"))
+func HandleInProgressMerge() error {
+	var str string
+	str += fmt.Sprintf("error: %s\n", INPROGRESS_MESSAGE)
+	str += fmt.Sprintf("%s\n", CONFLICT_MESSAGE)
+	return &ers.MergeFailOnConflictError{
+		Message: str,
+	}
 
 }
 
 //abortはmergeでconflictする前のHEADの状態に戻す
-func HandleAbort(pc *PendingCommit, mc MergeCommand, repo *Repository, w io.Writer) error {
-	err := pc.Clear()
+func HandleAbort(pc *PendingCommit, mc MergeCommand, repo *Repository) error {
+	err := pc.Clear(PENDING_MERGE_TYPE)
 	if err != nil {
 		return err
 	}
@@ -217,32 +220,32 @@ func RunMerge(mc MergeCommand, m *Merge, w io.Writer) error {
 
 	//--abortの時
 	if mc.Option.hasAbort {
-		return HandleAbort(pc, mc, m.repo, w)
+		return HandleAbort(pc, mc, m.repo)
 	}
 
 	//--continueの時
 	//conflictでcommit出来なかったやつをここでcommitしてMergeHeadを消す,--continueの時はここで終わり
 	//conflictのあとはadd . -> merge --c or commitで解消する、merge --cのときはこっち
 	if mc.Option.hasContinue {
-		return HandleContinue(pc, mc, m.repo, w)
+		return HandleContinue(pc, mc, m.repo)
 	}
 
 	//まだconflict中だったら
 	//Startより先にInProgressを判断しないと、StartでMergeHeadを作るので常にInProgressになるので、
 	//InProgressを先に持ってくる
 	if pc.InProgress() {
-		HandleInProgressMerge(w)
-		return nil
+		return HandleInProgressMerge()
 	}
 
-	err := pc.Start(m.rightObjId, mc.Message)
+	err := pc.Start(m.rightObjId, mc.Message, PENDING_MERGE_TYPE)
 	if err != nil {
 		return err
 	}
 	//Null Merge
 	if m.AlreadyMerged() {
-		w.Write([]byte(AlreadyMergedMessage))
-		return nil
+		return &ers.MergeFailOnConflictError{
+			Message: AlreadyMergedMessage,
+		}
 	}
 
 	if m.FastForward() {
@@ -255,12 +258,13 @@ func RunMerge(mc MergeCommand, m *Merge, w io.Writer) error {
 		return err
 	}
 
-	//ConflictがあるならIndexを更新するまでで、新しくCommitは作らない
+	//ConflictがあるならIndexを更新+workspace更新するまでで、新しくCommitは作らない
 	//migartionのときにdetectするのは現在のworkspace<->index,index<->commit間
 	//対してmergeのconflictDetectionは異なるcommit間なのでDetectionの範囲が違う
 	if m.repo.i.IsConflicted() {
-		w.Write([]byte(MergeFaildMessage))
-		return nil
+		return &ers.ConflictOccurError{
+			ConflictDetail: MergeFaildMessage,
+		}
 	}
 
 	err = m.CommitMerge(mc.Name, mc.Email, mc.Message)
@@ -269,7 +273,7 @@ func RunMerge(mc MergeCommand, m *Merge, w io.Writer) error {
 	}
 
 	//Commitが正常に終了した場合はMerge_HEAD等を削除する
-	err = pc.Clear()
+	err = pc.Clear(PENDING_MERGE_TYPE)
 	if err != nil {
 		return err
 	}

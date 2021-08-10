@@ -48,6 +48,20 @@ func (i *Index) IsConflicted() bool {
 	return false
 }
 
+func (i *Index) ConflictPaths() map[string]struct{} {
+	m := make(map[string]struct{})
+
+	for _, v := range i.Entries {
+		e, _ := v.(*con.Entry)
+
+		if e.GetStage() > 0 {
+			m[e.Path] = struct{}{}
+		}
+	}
+
+	return m
+}
+
 func GenerateIndex(path string) *Index {
 	return &Index{
 		Path:    path,
