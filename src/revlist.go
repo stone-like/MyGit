@@ -27,6 +27,11 @@ type RevList struct {
 	prune   []string                       // log filepathの時使う
 	diffs   map[string]*TreeDiff           // --patchの時に利用(現在patch実装していないのでいらないけど後々使う)
 	filter  *PathFilter
+	walk    bool
+}
+
+func (r *RevList) GetQueue() *util.PriorityQueue {
+	return r.queue
 }
 
 // A -> B -> C
@@ -137,6 +142,58 @@ func (r *RevList) LimitQueue() error {
 
 }
 
+func (r *RevList) RunGetAllCommits() ([]*con.CommitFromMem, error) {
+	var commitList []*con.CommitFromMem
+
+	for {
+
+		if r.queue.Queue.Len() == 0 {
+			break
+		}
+
+		v := r.queue.Pop()
+		c, ok := v.(*con.CommitFromMem)
+		if !ok {
+			return nil, ErrorObjeToEntryConvError
+		}
+
+		//limitedの時はLimitQueueの時AddParentをやったからいいけどLimitedじゃないときはここでやる
+		err := r.AddParent(c)
+		if err != nil {
+			return nil, err
+		}
+
+		if r.IsMarked(c.ObjId, UNINTERESTED) {
+			continue
+		}
+
+		if r.IsMarked(c.ObjId, TREE_SAME) {
+			continue
+		}
+
+		commitList = append(commitList, c)
+
+	}
+
+	return commitList, nil
+
+}
+
+func (r *RevList) GetAllCommitsOnLimit() ([]*con.CommitFromMem, error) {
+	r.LimitQueue()
+	return r.RunGetAllCommits()
+}
+
+func (r *RevList) GetAllCommits() ([]*con.CommitFromMem, error) {
+
+	if r.Limited {
+		return r.GetAllCommitsOnLimit()
+	}
+
+	return r.RunGetAllCommits()
+
+}
+
 func (r *RevList) OutputCommit(show func(c *con.CommitFromMem) error) error {
 	for {
 
@@ -176,7 +233,7 @@ func (r *RevList) OutputCommit(show func(c *con.CommitFromMem) error) error {
 }
 
 func (r *RevList) AddParent(c *con.CommitFromMem) error {
-	if r.IsMarked(c.ObjId, ADDED) {
+	if !r.walk || r.IsMarked(c.ObjId, ADDED) {
 		return nil
 	} else {
 		r.Mark(c.ObjId, ADDED)
@@ -281,6 +338,15 @@ func (r *RevList) TreeDiffChanged(oldObjId, newObjId string) bool {
 }
 
 func GenerateRevList(repo *Repository, branches []string) (*RevList, error) {
+	return RunGenerateRevList(true, repo, branches)
+}
+
+func GenerateRevListWithWalk(walk bool, repo *Repository, branches []string) (*RevList, error) {
+	return RunGenerateRevList(walk, repo, branches)
+}
+
+//...や^でない場合はAddParentしない、これはcherrypick A BとしたときにA,Bしかいらなくて、A,Bの親はいらない
+func RunGenerateRevList(walk bool, repo *Repository, branches []string) (*RevList, error) {
 	if len(branches) == 0 {
 		branches = []string{"HEAD"}
 	}
@@ -290,6 +356,7 @@ func GenerateRevList(repo *Repository, branches []string) (*RevList, error) {
 		commits: make(map[string]*con.CommitFromMem),
 		flags:   make(map[string]map[string]struct{}), //nestedMapの場合内側がmakeできていないので注意
 		queue:   util.GeneratePriorityQueue(),
+		walk:    walk,
 	}
 	//Generateの時点で時間順にCommitを並べる
 	for _, b := range branches {
@@ -396,6 +463,7 @@ func (r *RevList) MarkParentUninteresting(c *con.CommitFromMem) {
 	}
 }
 
+//walk=trueならAddParent
 func (r *RevList) HandleRevision(name string) error {
 
 	rangeSlice := dUtil.CheckRegExpSubString(RANGE, name)
@@ -408,8 +476,10 @@ func (r *RevList) HandleRevision(name string) error {
 	} else if len(rangeSlice) != 0 {
 		r.SetStartPoint(rangeSlice[0][1], true)
 		r.SetStartPoint(rangeSlice[0][2], false)
+		r.walk = true
 	} else if len(excludeSlice) != 0 {
 		r.SetStartPoint(excludeSlice[0][1], true)
+		r.walk = true
 	} else {
 		//excludeに当てはまらない普通のやつ
 		r.SetStartPoint(name, false)

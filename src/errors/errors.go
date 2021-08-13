@@ -115,6 +115,38 @@ func (m *MergeFailOnConflictError) GetContent() string {
 	return m.Message
 }
 
+type RevisionWillWriteError struct {
+	Message string
+}
+
+func (r *RevisionWillWriteError) UserCause() string {
+	return r.Message
+}
+
+func (r *RevisionWillWriteError) Error() string {
+	return "RevisionWillWriteError"
+}
+
+func (r *RevisionWillWriteError) GetContent() string {
+	return r.Message
+}
+
+type SequenceAbortError struct {
+	Message string
+}
+
+func (s *SequenceAbortError) UserCause() string {
+	return s.Message
+}
+
+func (s *SequenceAbortError) Error() string {
+	return "SequenceAbortError"
+}
+
+func (s *SequenceAbortError) GetContent() string {
+	return s.Message
+}
+
 type InternalError interface {
 	Cause() string
 }

@@ -226,14 +226,14 @@ func TestGetError(t *testing.T) {
 		targetString  string
 		expectedError error
 	}{
-		{"AmbiguousError", `18`, &e.InvalidObjectError{
-			Message: "short SHA1 18 is ambiguos",
-			Hint: []string{
-				"The candidates are:",
-				" 1800a6 commit 2021-07-18 - this is commitMessage",
-				" 180cf8 blob",
-			},
-			CriticalInfo: "Not a valid object name: 18",
+		{"AmbiguousError", `18`, &e.RevisionWillWriteError{
+			Message: `short SHA1 18 is ambiguos
+hint: 
+The candidates are:
+ 1800a6 commit 2021-07-18 - this is commitMessage
+ 180cf8 blob
+Not a valid object name: 18
+`,
 		}},
 		{"ConversionError", `d234c5e057fe32c676ea67e8cb38f4625ddaeb54`, &e.ObjConvertionError{
 			Type:         "commit",

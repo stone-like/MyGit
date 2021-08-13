@@ -514,3 +514,7 @@ func (r *Refs) HeadsPath() string {
 func (r *Refs) HeadPath() string {
 	return filepath.Join(r.Path, "HEAD")
 }
+
+func (r *Refs) OrigHeadPath() string {
+	return filepath.Join(r.Path, ORIG_HEAD)
+}

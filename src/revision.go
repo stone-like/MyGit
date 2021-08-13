@@ -149,6 +149,22 @@ func ResolveRev(obj BranchObj, repo *Repository) (string, error) {
 	}
 }
 
+func ConvertToWillWriteError(err *e.InvalidObjectError) error {
+
+	var str string
+
+	str += fmt.Sprintf("%s\n", err.Message)
+	str += fmt.Sprintf("hint: \n")
+	for _, line := range err.Hint {
+		str += fmt.Sprintf("%s\n", line)
+	}
+	str += fmt.Sprintf("%s\n", err.CriticalInfo)
+
+	return &e.RevisionWillWriteError{
+		Message: str,
+	}
+}
+
 func AddInfoToObjConvertionError(targetName string, err error) error {
 	switch er := err.(type) {
 	case *e.ObjConvertionError:
@@ -159,7 +175,7 @@ func AddInfoToObjConvertionError(targetName string, err error) error {
 	case *e.InvalidObjectError:
 		{
 			er.CriticalInfo = fmt.Sprintf("Not a valid object name: %s", targetName)
-			return er
+			return ConvertToWillWriteError(er)
 		}
 	default:
 		return err
@@ -169,16 +185,8 @@ func AddInfoToObjConvertionError(targetName string, err error) error {
 
 var ErrorNonExistObjId = errors.New("non exists objId")
 
-func ResolveRef(r *Ref, repo *Repository) (string, error) {
-	objId, _ := repo.r.ReadRef(r.Name)
-
-	if objId != "" {
-		return objId, nil
-	}
-
-	//このobjDir以降によってr.nameがブランチでなくてobjIdでも処理できる
-	//oidはobjectPathのdirname+pathnameなので
-	objDir := repo.d.ObjDirname(r.Name)
+func PrefixMatch(name string, repo *Repository) (string, error) {
+	objDir := repo.d.ObjDirname(name)
 
 	candicates, err := repo.w.ListFiles(objDir)
 	if err != nil {
@@ -188,7 +196,7 @@ func ResolveRef(r *Ref, repo *Repository) (string, error) {
 	objIds := make([]string, 0, len(candicates))
 
 	for _, c := range candicates {
-		objId, match := PrefixMatch(r.Name, filepath.Base(objDir), filepath.Base(c))
+		objId, match := RunPrefixMatch(name, filepath.Base(objDir), filepath.Base(c))
 		if match {
 			objIds = append(objIds, objId)
 		}
@@ -200,10 +208,24 @@ func ResolveRef(r *Ref, repo *Repository) (string, error) {
 	}
 
 	if len(objIds) > 1 {
-		return "", CreateAnbiguosSha1Message(r.Name, objIds, repo)
+		return "", CreateAnbiguosSha1Message(name, objIds, repo)
 	}
 
 	return "", ErrorNonExistObjId
+
+}
+
+func ResolveRef(r *Ref, repo *Repository) (string, error) {
+	objId, _ := repo.r.ReadRef(r.Name)
+
+	if objId != "" {
+		return objId, nil
+	}
+
+	//このobjDir以降によってr.nameがブランチでなくてobjIdでも処理できる
+	//oidはobjectPathのdirname+pathnameなので
+
+	return PrefixMatch(r.Name, repo)
 
 }
 
@@ -240,7 +262,7 @@ func CreateAnbiguosSha1Message(name string, objIds []string, repo *Repository) e
 	}
 }
 
-func PrefixMatch(name, dirname, filename string) (string, bool) {
+func RunPrefixMatch(name, dirname, filename string) (string, bool) {
 	objId := dirname + filename
 
 	return objId, strings.HasPrefix(objId, name)

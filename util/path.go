@@ -132,7 +132,7 @@ func pathMatch(s []string, e string) (bool, error) {
 	return false, nil
 }
 
-func reverse(ss []string) []string {
+func Reverse(ss []string) []string {
 	last := len(ss) - 1
 	for i := 0; i < len(ss)/2; i++ {
 		ss[i], ss[last-i] = ss[last-i], ss[i]
@@ -153,5 +153,5 @@ func DisectPath(path string) []string {
 		path = filepath.Dir(path)
 		paths = append(paths, temp)
 	}
-	return reverse(paths)
+	return Reverse(paths)
 }
