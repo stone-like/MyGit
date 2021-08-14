@@ -15,10 +15,22 @@ import (
 	"strings"
 )
 
+type ToDoType string
+
+const (
+	PICK   ToDoType = "pick"
+	REVERT          = "revert"
+)
+
+type CommandContent struct {
+	c    *con.CommitFromMem
+	Type ToDoType
+}
+
 type Sequencer struct {
 	repo    *Repository
 	Path    string
-	Command []*con.CommitFromMem
+	Command []*CommandContent
 }
 
 func GenerateSequencer(repo *Repository) *Sequencer {
@@ -158,8 +170,11 @@ func (s *Sequencer) Start() error {
 
 }
 
-func (s *Sequencer) Push(c *con.CommitFromMem) {
-	s.Command = append(s.Command, c)
+func (s *Sequencer) Push(toDoType ToDoType, c *con.CommitFromMem) {
+	s.Command = append(s.Command, &CommandContent{
+		Type: toDoType,
+		c:    c,
+	})
 }
 
 func (s *Sequencer) UpdateAbortSafetyLatest() error {
@@ -181,13 +196,13 @@ func (s *Sequencer) Shift() (*con.CommitFromMem, error) {
 		return nil, nil
 	}
 
-	lastCommit := s.Command[0]
+	lastCommit := s.Command[0].c
 	s.Command = s.Command[1:]
 
 	return lastCommit, nil
 }
 
-func (s *Sequencer) NextCommand() *con.CommitFromMem {
+func (s *Sequencer) NextCommand() *CommandContent {
 
 	if len(s.Command) == 0 {
 		return nil
@@ -201,7 +216,7 @@ func (s *Sequencer) NextCommand() *con.CommitFromMem {
 // pick ...
 
 //\Sは非空白文字のこと
-var PickExp = `^pick (\S+) (.*)$`
+var PickExp = `^(\S+) (\S+) (.*)$`
 
 func (s *Sequencer) ParseToDo(content string) error {
 	buf := bytes.NewBuffer([]byte(content))
@@ -214,7 +229,9 @@ func (s *Sequencer) ParseToDo(content string) error {
 			return ErrorInvalidToDoContent
 		}
 
-		pickObjId := pickExped[0][1]
+		toDoType := pickExped[0][1]
+
+		pickObjId := pickExped[0][2]
 
 		objId, err := PrefixMatch(pickObjId, s.repo)
 		if err != nil {
@@ -222,13 +239,19 @@ func (s *Sequencer) ParseToDo(content string) error {
 		}
 
 		o, err := s.repo.d.ReadObject(objId)
+		if err != nil {
+			return err
+		}
 
 		c, ok := o.(*con.CommitFromMem)
 		if !ok {
 			return ErrorObjeToEntryConvError
 		}
 
-		s.Command = append(s.Command, c)
+		s.Command = append(s.Command, &CommandContent{
+			Type: ToDoType(toDoType),
+			c:    c,
+		})
 	}
 
 	return nil
@@ -263,9 +286,9 @@ func (s *Sequencer) WriteToDo() error {
 		return err
 	}
 
-	for _, c := range s.Command {
-		shortObjId := s.repo.d.ShortObjId(c.ObjId)
-		f.Write([]byte(fmt.Sprintf("pick %s %s\n", shortObjId, c.GetFirstLineMessage())))
+	for _, content := range s.Command {
+		shortObjId := s.repo.d.ShortObjId(content.c.ObjId)
+		f.Write([]byte(fmt.Sprintf("%s %s %s\n", content.Type, shortObjId, content.c.GetFirstLineMessage())))
 	}
 
 	return nil

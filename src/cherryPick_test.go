@@ -110,7 +110,7 @@ func TestCherryPick(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err = StartCherryPick(tempPath, []string{objId}, &CherryPickOption{}, &buf)
+	err = StartCherryPick(tempPath, []string{objId}, &SequenceOption{}, &buf)
 	assert.NoError(t, err)
 
 	newRepo := GenerateRepository(tempPath, gitPath, dbPath)
@@ -246,7 +246,7 @@ func TestCherryPickConflict(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err = StartCherryPick(tempPath, []string{objId}, &CherryPickOption{}, &buf)
+	err = StartCherryPick(tempPath, []string{objId}, &SequenceOption{}, &buf)
 	assert.NoError(t, err)
 
 	newRepo := GenerateRepository(tempPath, gitPath, dbPath)
@@ -363,7 +363,7 @@ func PrepareAfterCherryPickConflict(t *testing.T) string {
 	objId, err := ResolveRev(rev, repo)
 	assert.NoError(t, err)
 
-	err = StartCherryPick(tempPath, []string{objId}, &CherryPickOption{}, &buf)
+	err = StartCherryPick(tempPath, []string{objId}, &SequenceOption{}, &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -386,7 +386,7 @@ func TestCherryPickConflictMessageInProgress(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err = StartCherryPick(tempPath, []string{objId}, &CherryPickOption{}, &buf)
+	err = StartCherryPick(tempPath, []string{objId}, &SequenceOption{}, &buf)
 	assert.NoError(t, err)
 
 	newRepo := GenerateRepository(tempPath, gitPath, dbPath)
@@ -428,7 +428,7 @@ func TestCherryPickContinueWithoutAddingIndex(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err = StartCherryPick(tempPath, []string{objId}, &CherryPickOption{hasContinue: true}, &buf)
+	err = StartCherryPick(tempPath, []string{objId}, &SequenceOption{hasContinue: true}, &buf)
 	assert.NoError(t, err)
 
 	newRepo := GenerateRepository(tempPath, gitPath, dbPath)
@@ -573,7 +573,7 @@ func TestRangeCherryPickConflict(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	err = StartCherryPick(tempPath, []string{"master..test1"}, &CherryPickOption{}, &buf)
+	err = StartCherryPick(tempPath, []string{"master..test1"}, &SequenceOption{}, &buf)
 	assert.NoError(t, err)
 
 	newRepo := GenerateRepository(tempPath, gitPath, dbPath)
@@ -724,7 +724,7 @@ func PrepareAfterRangeCherryPickConflict(t *testing.T) string {
 	err = StartCommit(tempPath, "test", "test@example.com", "commitC", &buf)
 	assert.NoError(t, err)
 
-	err = StartCherryPick(tempPath, []string{"master..test1"}, &CherryPickOption{}, &buf)
+	err = StartCherryPick(tempPath, []string{"master..test1"}, &SequenceOption{}, &buf)
 	assert.NoError(t, err)
 
 	return tempPath
@@ -751,7 +751,7 @@ func TestRangeCherryPickContinue(t *testing.T) {
 	err = StartAdd(tempPath, "test", "test@example.com", "test", ss)
 	assert.NoError(t, err)
 
-	err = StartCherryPick(tempPath, []string{"master..test1"}, &CherryPickOption{hasContinue: true}, &buf)
+	err = StartCherryPick(tempPath, []string{"master..test1"}, &SequenceOption{hasContinue: true}, &buf)
 	assert.NoError(t, err)
 
 	//Fまでcommitが終了していること
@@ -789,7 +789,7 @@ func TestRangeCherryPickQuit(t *testing.T) {
 	dbPath := filepath.Join(gitPath, "objects")
 	repo := GenerateRepository(tempPath, gitPath, dbPath)
 
-	err := StartCherryPick(tempPath, []string{"master..test1"}, &CherryPickOption{hasQuit: true}, &buf)
+	err := StartCherryPick(tempPath, []string{"master..test1"}, &SequenceOption{hasQuit: true}, &buf)
 	assert.NoError(t, err)
 
 	rev, err := ParseRev("test1^")
@@ -838,7 +838,7 @@ func TestRangeCherryPickAbort(t *testing.T) {
 	beforeCherryObjId, err := ResolveRev(rev, repo)
 	assert.NoError(t, err)
 
-	err = StartCherryPick(tempPath, []string{"master..test1"}, &CherryPickOption{hasAbort: true}, &buf)
+	err = StartCherryPick(tempPath, []string{"master..test1"}, &SequenceOption{hasAbort: true}, &buf)
 	assert.NoError(t, err)
 
 	//cherryPick前に戻っていること
@@ -879,7 +879,7 @@ func TestRangeCherryPickAbortAfterHeadMoved(t *testing.T) {
 	repo := GenerateRepository(tempPath, gitPath, dbPath)
 
 	repo.r.UpdateHead("aaaaaaaaaaaaaa")
-	err := StartCherryPick(tempPath, []string{"master..test1"}, &CherryPickOption{hasAbort: true}, &buf)
+	err := StartCherryPick(tempPath, []string{"master..test1"}, &SequenceOption{hasAbort: true}, &buf)
 	assert.NoError(t, err)
 
 	str := buf.String()

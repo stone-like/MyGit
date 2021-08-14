@@ -5,45 +5,45 @@ import (
 	"fmt"
 	"io"
 	con "mygit/src/database/content"
-	"mygit/src/database/lock"
 	ers "mygit/src/errors"
 	"path/filepath"
 	"strings"
 )
 
-type CherryPickOption struct {
-	hasContinue bool
-	hasAbort    bool
-	hasQuit     bool
-}
+// type CherryPickOption struct {
+// 	hasContinue bool
+// 	hasAbort    bool
+// 	hasQuit     bool
+// }
+
+// type CherryPick struct {
+// 	args   []string
+// 	repo   *Repository
+// 	seq    *Sequencer
+// 	pc     *PendingCommit
+// 	option *CherryPickOption
+// 	w      io.Writer
+// }
+
+// func GenerateCherryPick(args []string, seq *Sequencer, pc *PendingCommit, repo *Repository, option *CherryPickOption, w io.Writer) *CherryPick {
+// 	return &CherryPick{
+// 		args:   args,
+// 		repo:   repo,
+// 		seq:    seq,
+// 		pc:     pc,
+// 		option: option,
+// 		w:      w,
+// 	}
+// }
 
 type CherryPick struct {
-	args   []string
-	repo   *Repository
-	seq    *Sequencer
-	pc     *PendingCommit
-	option *CherryPickOption
-	w      io.Writer
 }
 
-func GenerateCherryPick(args []string, seq *Sequencer, pc *PendingCommit, repo *Repository, option *CherryPickOption, w io.Writer) *CherryPick {
-	return &CherryPick{
-		args:   args,
-		repo:   repo,
-		seq:    seq,
-		pc:     pc,
-		option: option,
-		w:      w,
-	}
+func (ch *CherryPick) GetPendingType() PendingType {
+	return PEDING_CHERRY_PICK_TYPE
 }
 
 var ErrorCommithasNotParentOnCherryPick = errors.New("ErrorCommithasNotParentOnCherryPick")
-
-var CherryPickConflictMessage = `hint: 
- after resolving the conflicts, mark the corrected paths
- with 'mygit add <paths>' or 'mygit rm <paths>'
- and commit the result with 'mygit commit'
-`
 
 //通常のマージとは違いrightが指定したcommit,baseがcommitの親となる
 func GenerateCherryPickMerge(c *con.CommitFromMem, repo *Repository) (*Merge, error) {
@@ -71,15 +71,6 @@ func GenerateCherryPickMerge(c *con.CommitFromMem, repo *Repository) (*Merge, er
 	}, nil
 }
 
-func FinishPick(c *con.Commit, repo *Repository) error {
-	err := WriteCommit(c, repo)
-	if err != nil {
-		return err
-	}
-	PrintCommit(c)
-	return nil
-}
-
 func CreateConflictMessage(commitMessage string, repo *Repository) string {
 	var str string
 	str += fmt.Sprintf("%s\n", commitMessage)
@@ -92,98 +83,28 @@ func CreateConflictMessage(commitMessage string, repo *Repository) string {
 	return str
 }
 
-func CreateConflictMessageError(rightName, message string) error {
-	return &ers.MergeFailOnConflictError{
-		Message: fmt.Sprintf("error: could not apply %s\n%s", rightName, message),
-	}
-}
-
-func HandleConflict(c *con.CommitFromMem, m *Merge, cp *CherryPick) error {
-
-	//seqをつかってToDoへ書き込み
-	err := cp.seq.WriteToDo()
-	if err != nil {
-		return err
-	}
-
-	message := CreateConflictMessage(c.Message, cp.repo)
-	err = cp.pc.Start(m.rightObjId, message, PEDING_CHERRY_PICK_TYPE)
-	if err != nil {
-		return err
-	}
-
-	return CreateConflictMessageError(m.rightName, CherryPickConflictMessage)
-}
-
-func ContinueCommitProcess(cp *CherryPick) error {
-	l := lock.NewFileLock(cp.repo.i.Path)
-	l.Lock()
-	defer l.Unlock()
-
-	err := cp.repo.i.Load()
-	if err != nil {
-		return err
-	}
-
-	err = WriteCherryPickCommit(cp.pc, cp.repo)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func HandleCherryPickContinue(cp *CherryPick) error {
-
-	err := ContinueCommitProcess(cp)
-	if err != nil {
-		return err
-	}
-
-	//toDoPathをLock
-	sl := lock.NewFileLock(cp.seq.GetToDoPath())
-	sl.Lock()
-	defer sl.Unlock()
-
-	err = cp.seq.Load()
-	if err != nil {
-		return err
-	}
-
-	//RunPick中にエラーが出ると、shiftをする前でエラーとしてreturnされるので、まず操作完了させるためにshiftから
-	cp.seq.Shift()
-
-	//seq処理を再開
-	return ResumeSeq(cp)
-
-}
-
-func HandleInProgressCherryPick(m *Merge) error {
-	return CreateConflictMessageError(m.rightName, CherryPickConflictMessage)
-}
-
-func RunPick(c *con.CommitFromMem, cp *CherryPick) error {
+func RunPick(c *con.CommitFromMem, sd *SequenceData) error {
 
 	// if cp.option.hasContinue {
 	// 	return HandleCherryPickContinue(cp)
 	// }
 
-	m, err := GenerateCherryPickMerge(c, cp.repo)
+	m, err := GenerateCherryPickMerge(c, sd.repo)
 	if err != nil {
 		return err
 	}
 
-	if cp.pc.InProgress() {
-		return HandleInProgressCherryPick(m)
+	if sd.pc.InProgress() {
+		return HandleInProgress(m)
 	}
 
-	err = m.ResolveMerge(cp.w)
+	err = m.ResolveMerge(sd.w)
 	if err != nil {
 		return err
 	}
 
-	if cp.repo.i.IsConflicted() {
-		return HandleConflict(c, m, cp)
+	if sd.repo.i.IsConflicted() {
+		return HandleConflict(c.Message, PEDING_CHERRY_PICK_TYPE, c, m, sd)
 	}
 
 	pickedCommit, err := CreateCommit(
@@ -191,48 +112,16 @@ func RunPick(c *con.CommitFromMem, cp *CherryPick) error {
 		c.Author.Name,
 		c.Author.Email,
 		c.Message,
-		cp.repo,
+		sd.repo,
 	)
 	if err != nil {
 		return err
 	}
 
-	return FinishPick(pickedCommit, cp.repo)
+	return FinishRunCommit(pickedCommit, sd.repo)
 }
 
-func ResumeSeq(cp *CherryPick) error {
-
-	for {
-
-		nextCommit := cp.seq.NextCommand()
-
-		if nextCommit == nil {
-			break
-		}
-
-		err := RunPick(nextCommit, cp)
-		if err != nil {
-			return err
-		}
-
-		//正常にPickできたらShiftでSeqから取り除く
-		_, err = cp.seq.Shift()
-		if err != nil {
-			return err
-		}
-
-		//正常にpickできたら、abortSafetyを最新のコミットにupdate
-		err = cp.seq.UpdateAbortSafetyLatest()
-		if err != nil {
-			return err
-		}
-	}
-
-	//エラーなしでできたら.git/sequencerを消す
-	cp.seq.Clear()
-
-	return nil
-}
+//ここまでCheのみ
 
 func CommitReverse(ss []*con.CommitFromMem) []*con.CommitFromMem {
 	last := len(ss) - 1
@@ -243,8 +132,8 @@ func CommitReverse(ss []*con.CommitFromMem) []*con.CommitFromMem {
 	return ss
 }
 
-func StoreCommitToSeq(cp *CherryPick) error {
-	revlist, err := GenerateRevListWithWalk(false, cp.repo, cp.args)
+func (ch *CherryPick) StoreCommitToSeq(sd *SequenceData) error {
+	revlist, err := GenerateRevListWithWalk(false, sd.repo, sd.args)
 	if err != nil {
 		return err
 	}
@@ -256,95 +145,60 @@ func StoreCommitToSeq(cp *CherryPick) error {
 	}
 
 	for _, c := range CommitReverse(commitList) {
-		cp.seq.Push(c)
+		sd.seq.Push(PICK, c)
 	}
 
 	return nil
 }
 
-//abortはquitに加えてcherryPickをする前に戻す、なのでsequencer.abortでresetHardと、updateRefを使用
-func HandleCherryPickAbort(cp *CherryPick) error {
-	if cp.pc.InProgress() {
-		err := cp.pc.Clear(PEDING_CHERRY_PICK_TYPE)
-		if err != nil {
-			return err
-		}
+func (ch *CherryPick) ContinueWriteCommit(sd *SequenceData) error {
+
+	//まずadd .でstage1~3を除去することがmerge再開の前提
+	if sd.repo.i.IsConflicted() {
+		return HandleConflictedIndex()
 	}
 
-	l := lock.NewFileLock(cp.repo.i.Path)
-	l.Lock()
-	defer l.Unlock()
-
-	err := cp.repo.i.Load()
+	headObjId, err := sd.repo.r.ReadHead()
 	if err != nil {
 		return err
 	}
 
-	err = cp.seq.Abort()
+	pickObjId, err := sd.pc.GetMergeObjId(PEDING_CHERRY_PICK_TYPE)
 	if err != nil {
 		return err
 	}
 
-	//indexもアップデート
-	err = cp.repo.i.Write(cp.repo.i.Path)
+	o, err := sd.repo.d.ReadObject(pickObjId)
+	if err != nil {
+		return err
+	}
+
+	c, ok := o.(*con.CommitFromMem)
+	if !ok {
+		return ErrorObjeToEntryConvError
+	}
+
+	parents := []string{headObjId}
+
+	pickedCommit, err := CreateCommit(parents, c.Author.Name, c.Author.Email, CHERRY_PICK_MESSAGE, sd.repo)
+	if err != nil {
+		return err
+	}
+	err = WriteCommit(pickedCommit, sd.repo)
+	if err != nil {
+		return err
+	}
+
+	err = sd.pc.Clear(PEDING_CHERRY_PICK_TYPE)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-//quitでやることはcherryPickで作ったファイル群を消すことだけ、ただindex,workspace,HEADはcherryPickの影響が残ったまま
-func HandleCherryPickQuit(cp *CherryPick) error {
-	//quit前にConflict中だったら
-	if cp.pc.InProgress() {
-		err := cp.pc.Clear(PEDING_CHERRY_PICK_TYPE)
-		if err != nil {
-			return err
-		}
-	}
-
-	return cp.seq.Clear()
 
 }
 
-func RunCherryPick(cp *CherryPick) error {
-
-	if cp.option.hasQuit {
-		return HandleCherryPickQuit(cp)
-	}
-
-	if cp.option.hasAbort {
-		return HandleCherryPickAbort(cp)
-	}
-
-	if cp.option.hasContinue {
-		return HandleCherryPickContinue(cp)
-	}
-
-	err := cp.seq.Start()
-	if err != nil {
-		return err
-	}
-
-	//toDoPathをLock,toDoはCherrypick失敗時、つまりresumrSeqの中のhandleConflictで書かれるのでここでToDoをロック(ResumeSeqの中の方がいいのかもしれないが)
-	l := lock.NewFileLock(cp.seq.GetToDoPath())
-	l.Lock()
-	defer l.Unlock()
-
-	//実際にcherryPickを始める前にStoreでTODOCOmmitを全部Seq.commandに追加している
-	//Pick成功時にはcommandから取り除く
-	//なのでエラー時にseq.Commandのやつを書き込めばtodo予定の奴だけ書き込まれる、成功済みは書き込まれない
-	err = StoreCommitToSeq(cp)
-	if err != nil {
-		return err
-	}
-
-	return ResumeSeq(cp)
-
-}
-
-func StartCherryPick(rootPath string, args []string, option *CherryPickOption, w io.Writer) error {
+func StartCherryPick(rootPath string, args []string, option *SequenceOption, w io.Writer) error {
 	gitPath := filepath.Join(rootPath, ".git")
 	dbPath := filepath.Join(gitPath, "objects")
 	repo := GenerateRepository(rootPath, gitPath, dbPath)
@@ -352,8 +206,8 @@ func StartCherryPick(rootPath string, args []string, option *CherryPickOption, w
 	seq := GenerateSequencer(repo)
 	pc := GeneratePendingCommit(repo.r.Path)
 
-	cp := GenerateCherryPick(args, seq, pc, repo, option, w)
+	sd := GenerateSequenceData(args, seq, pc, repo, option, w)
 
-	return ers.HandleWillWriteError(RunCherryPick(cp), w)
+	return ers.HandleWillWriteError(RunSequencing(sd, &CherryPick{}), w)
 
 }

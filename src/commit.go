@@ -66,52 +66,52 @@ func HandleConflictedIndex() error {
 	}
 }
 
-func WriteCherryPickCommit(pc *PendingCommit, repo *Repository) error {
+// func WriteCherryPickCommit(pc *PendingCommit, repo *Repository) error {
 
-	//まずadd .でstage1~3を除去することがmerge再開の前提
-	if repo.i.IsConflicted() {
-		return HandleConflictedIndex()
-	}
+// 	//まずadd .でstage1~3を除去することがmerge再開の前提
+// 	if repo.i.IsConflicted() {
+// 		return HandleConflictedIndex()
+// 	}
 
-	headObjId, err := repo.r.ReadHead()
-	if err != nil {
-		return err
-	}
+// 	headObjId, err := repo.r.ReadHead()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	pickObjId, err := pc.GetMergeObjId(PEDING_CHERRY_PICK_TYPE)
-	if err != nil {
-		return err
-	}
+// 	pickObjId, err := pc.GetMergeObjId(PEDING_CHERRY_PICK_TYPE)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	o, err := repo.d.ReadObject(pickObjId)
-	if err != nil {
-		return err
-	}
+// 	o, err := repo.d.ReadObject(pickObjId)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	c, ok := o.(*con.CommitFromMem)
-	if !ok {
-		return ErrorObjeToEntryConvError
-	}
+// 	c, ok := o.(*con.CommitFromMem)
+// 	if !ok {
+// 		return ErrorObjeToEntryConvError
+// 	}
 
-	parents := []string{headObjId}
+// 	parents := []string{headObjId}
 
-	pickedCommit, err := CreateCommit(parents, c.Author.Name, c.Author.Email, CHERRY_PICK_MESSAGE, repo)
-	if err != nil {
-		return err
-	}
-	err = WriteCommit(pickedCommit, repo)
-	if err != nil {
-		return err
-	}
+// 	pickedCommit, err := CreateCommit(parents, c.Author.Name, c.Author.Email, CHERRY_PICK_MESSAGE, repo)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = WriteCommit(pickedCommit, repo)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = pc.Clear(PEDING_CHERRY_PICK_TYPE)
-	if err != nil {
-		return err
-	}
+// 	err = pc.Clear(PEDING_CHERRY_PICK_TYPE)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
+// 	return nil
 
-}
+// }
 
 func WriteMergeCommit(name, email string, pc *PendingCommit, repo *Repository) error {
 	//まずadd .でstage1~3を除去することがmerge再開の前提
@@ -146,16 +146,61 @@ func WriteMergeCommit(name, email string, pc *PendingCommit, repo *Repository) e
 	return nil
 }
 
+// func WriteRevertCommit(pc *PendingCommit, repo *Repository) error {
+
+// 	//まずadd .でstage1~3を除去することがmerge再開の前提
+// 	if repo.i.IsConflicted() {
+// 		return HandleConflictedIndex()
+// 	}
+
+// 	headObjId, err := repo.r.ReadHead()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	o, err := repo.d.ReadObject(headObjId)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	c, ok := o.(*con.CommitFromMem)
+// 	if !ok {
+// 		return ErrorObjeToEntryConvError
+// 	}
+
+// 	mergeMessage, err := pc.GetMergeMessage()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	parents := []string{headObjId}
+
+// 	revertedCommit, err := CreateCommit(parents, c.Author.Name, c.Author.Email, mergeMessage, repo)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = WriteCommit(revertedCommit, repo)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	err = pc.Clear(PENDING_REVERT_TYPE)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+
+// }
+
 func ResumeMerge(name, email string, pendingType PendingType, pc *PendingCommit, repo *Repository) error {
 	switch pendingType {
 	case PENDING_MERGE_TYPE:
-		{
-			return WriteMergeCommit(name, email, pc, repo)
-		}
-	case PEDING_CHERRY_PICK_TYPE:
-		{
-			return WriteCherryPickCommit(pc, repo)
-		}
+		return WriteMergeCommit(name, email, pc, repo)
+	// case PEDING_CHERRY_PICK_TYPE:
+	// 	return WriteCherryPickCommit(pc, repo)
+	// case PENDING_REVERT_TYPE:
+	// 	return WriteRevertCommit(pc, repo)
 	default:
 		return ErrorInvalidMergeType
 	}

@@ -21,11 +21,13 @@ type PendingType string
 const (
 	PENDING_MERGE_TYPE      PendingType = ":merge"
 	PEDING_CHERRY_PICK_TYPE             = ":cherry_pick"
+	PENDING_REVERT_TYPE                 = ":revert"
 )
 
 var typesMap = map[PendingType]string{
 	PENDING_MERGE_TYPE:      "MERGE_HEAD",
 	PEDING_CHERRY_PICK_TYPE: "CHERRY_PICK_HEAD",
+	PENDING_REVERT_TYPE:     "REVERT_HEAD",
 }
 
 var Merge_HEAD = "Merge_HEAD"
@@ -159,6 +161,19 @@ func (p *PendingCommit) Clear(mergeType PendingType) error {
 	}
 
 	return nil
+}
+
+func (p *PendingCommit) GetMergeType() (string, error) {
+	for _, path := range typesMap {
+		absPath := filepath.Join(p.Path, path)
+		stat, _ := os.Stat(absPath)
+
+		if stat != nil {
+			return path, nil
+		}
+	}
+
+	return "", ErrorInvalidMergeType
 }
 
 func (p *PendingCommit) InProgress() bool {
